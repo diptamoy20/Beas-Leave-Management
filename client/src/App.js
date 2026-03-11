@@ -37,7 +37,19 @@ function App() {
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        color: 'white',
+        fontSize: '18px'
+      }}>
+        Loading...
+      </div>
+    );
   }
 
   return (
@@ -54,6 +66,8 @@ function App() {
               <Route path="/my-leaves" element={<MyLeaves />} />
               <Route path="/leave-balance" element={<LeaveBalance />} />
               <Route path="/manage-leaves" element={(user.role === 'manager' || user.role === 'admin') ? <ManageLeaves /> : <Navigate to="/dashboard" />} />
+              <Route path="/login" element={<Navigate to="/dashboard" />} />
+              <Route path="/register" element={<Navigate to="/dashboard" />} />
               <Route path="/" element={<Navigate to="/dashboard" />} />
             </Routes>
           </div>
@@ -62,7 +76,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       )}
     </Router>

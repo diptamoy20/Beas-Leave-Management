@@ -1,10 +1,16 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 function Sidebar({ user, onLogout }) {
   const location = useLocation();
+  const navigate = useNavigate();
   
   const isActive = (path) => location.pathname === path ? 'active' : '';
+
+  const handleLogout = () => {
+    onLogout();
+    navigate('/login');
+  };
 
   return (
     <div className="sidebar">
@@ -62,12 +68,12 @@ function Sidebar({ user, onLogout }) {
       </ul>
 
       <div style={{position: 'absolute', bottom: '24px', left: '0', right: '0', padding: '0 24px'}}>
-        <div style={{padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '12px'}}>
+        <div style={{padding: '16px', background: '#f9fafb', borderRadius: '8px', marginBottom: '12px', border: '1px solid #e5e7eb'}}>
           <div style={{fontSize: '12px', color: '#9ca3af', marginBottom: '4px'}}>Logged in as</div>
-          <div style={{fontSize: '14px', fontWeight: '600'}}>{user.name}</div>
+          <div style={{fontSize: '14px', fontWeight: '600', color: '#1a1a1a'}}>{user.name}</div>
           <div style={{fontSize: '12px', color: '#9ca3af'}}>{user.department}</div>
         </div>
-        <button onClick={onLogout} className="btn btn-logout" style={{width: '100%'}}>
+        <button onClick={handleLogout} className="btn btn-logout" style={{width: '100%'}}>
           🚪 Logout
         </button>
       </div>
