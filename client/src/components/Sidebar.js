@@ -13,7 +13,7 @@ function Sidebar({ user, onLogout }) {
           <img 
             src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
             alt="Logo" 
-            style={{width: '40px', height: '40px', objectFit: 'contain'}}
+            style={{width: '100%', height: '100%', objectFit: 'contain'}}
           />
           <div>
             <p style={{fontSize: '20px', color: '#6b7280', margin: '0'}}>Leave Management</p>
