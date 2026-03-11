@@ -9,14 +9,14 @@ function Sidebar({ user, onLogout }) {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+        <div style={{display: 'flex', alignItems: 'center', flexDirection:"column", gap: 'px'}}>
           <img 
             src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
             alt="Logo" 
             style={{width: '40px', height: '40px', objectFit: 'contain'}}
           />
           <div>
-            <p style={{fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0'}}>Leave Management</p>
+            <p style={{fontSize: '20px', color: '#6b7280', margin: '0'}}>Leave Management</p>
           </div>
         </div>
       </div>
@@ -30,6 +30,11 @@ function Sidebar({ user, onLogout }) {
         <li>
           <Link to="/attendance" className={isActive('/attendance')}>
             <span>⏰</span> Attendance
+          </Link>
+        </li>
+        <li>
+          <Link to="/holidays" className={isActive('/holidays')}>
+            <span>📅</span> Holiday List
           </Link>
         </li>
         <li>

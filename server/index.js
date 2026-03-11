@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const leaveRoutes = require('./routes/leaves');
 const employeeRoutes = require('./routes/employees');
 const attendanceRoutes = require('./routes/attendance');
+const holidayRoutes = require('./routes/holidays');
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/holidays', holidayRoutes);
 
 // Serve static files from React app in production
 if (process.env.NODE_ENV === 'production') {

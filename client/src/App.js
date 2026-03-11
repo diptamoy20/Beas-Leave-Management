@@ -8,6 +8,7 @@ import MyLeaves from './components/MyLeaves';
 import LeaveBalance from './components/LeaveBalance';
 import ManageLeaves from './components/ManageLeaves';
 import Attendance from './components/Attendance';
+import Holidays from './components/Holidays';
 import Sidebar from './components/Sidebar';
 
 function App() {
@@ -48,6 +49,7 @@ function App() {
             <Routes>
               <Route path="/dashboard" element={<Dashboard user={user} />} />
               <Route path="/attendance" element={<Attendance />} />
+              <Route path="/holidays" element={<Holidays />} />
               <Route path="/apply-leave" element={<ApplyLeave />} />
               <Route path="/my-leaves" element={<MyLeaves />} />
               <Route path="/leave-balance" element={<LeaveBalance />} />

@@ -10,7 +10,8 @@
     "install-client": "cd client && npm install",
     "build-client": "cd client && npm run build",
     "build": "npm run install-client && npm run build-client",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "seed-holidays": "node server/seedHolidays.js"
   },
   "keywords": ["leave", "management", "hr"],
   "author": "",
