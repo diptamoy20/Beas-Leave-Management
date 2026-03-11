@@ -26,7 +26,7 @@ function Login({ onLogin }) {
             src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
             alt="BEAS Consultancy Logo" 
           />
-          <h2>Welcome Back</h2>
+          <h2>Welcome</h2>
           <p>Sign in to your account to continue</p>
         </div>
         {error && <div className="error-message">{error}</div>}
