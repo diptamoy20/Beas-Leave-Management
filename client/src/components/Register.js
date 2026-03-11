@@ -5,6 +5,7 @@ import axios from 'axios';
 function Register() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
+    employee_id: '',
     name: '',
     email: '',
     password: '',
@@ -39,6 +40,16 @@ function Register() {
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
         <form onSubmit={handleSubmit} className="auth-form">
+          <div className="form-group">
+            <label>Employee ID</label>
+            <input
+              type="text"
+              value={formData.employee_id}
+              onChange={(e) => setFormData({...formData, employee_id: e.target.value})}
+              placeholder="Enter your employee ID"
+              required
+            />
+          </div>
           <div className="form-group">
             <label>Full Name</label>
             <input

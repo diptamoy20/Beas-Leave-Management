@@ -4,7 +4,7 @@ import axios from 'axios';
 
 function Login({ onLogin }) {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ identifier: '', password: '' });
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -32,12 +32,12 @@ function Login({ onLogin }) {
         {error && <div className="error-message">{error}</div>}
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label>Email Address</label>
+            <label>Email or Employee ID</label>
             <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
-              placeholder="Enter your email"
+              type="text"
+              value={formData.identifier}
+              onChange={(e) => setFormData({...formData, identifier: e.target.value})}
+              placeholder="Enter your email or employee ID"
               required
             />
           </div>

@@ -8,18 +8,23 @@ const router = express.Router();
 
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, department, role } = req.body;
+    const { employee_id, name, email, password, department, role } = req.body;
     
-    const [existing] = await db.query('SELECT * FROM employees WHERE email = ?', [email]);
-    if (existing.length > 0) {
-      return res.status(400).json({ message: 'User already exists' });
+    const [existingEmail] = await db.query('SELECT * FROM employees WHERE email = ?', [email]);
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ message: 'Email already exists' });
+    }
+
+    const [existingEmpId] = await db.query('SELECT * FROM employees WHERE employee_id = ?', [employee_id]);
+    if (existingEmpId.length > 0) {
+      return res.status(400).json({ message: 'Employee ID already exists' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
     const [result] = await db.run(
-      'INSERT INTO employees (name, email, password, department, role) VALUES (?, ?, ?, ?, ?)',
-      [name, email, hashedPassword, department, role || 'employee']
+      'INSERT INTO employees (employee_id, name, email, password, department, role) VALUES (?, ?, ?, ?, ?, ?)',
+      [employee_id, name, email, hashedPassword, department, role || 'employee']
     );
 
     await db.run(
@@ -35,9 +40,14 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { identifier, password } = req.body;
     
-    const [users] = await db.query('SELECT * FROM employees WHERE email = ?', [email]);
+    // Check if identifier is email or employee_id
+    const [users] = await db.query(
+      'SELECT * FROM employees WHERE email = ? OR employee_id = ?',
+      [identifier, identifier]
+    );
+    
     if (users.length === 0) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
@@ -59,6 +69,7 @@ router.post('/login', async (req, res) => {
       token,
       user: {
         id: user.id,
+        employee_id: user.employee_id,
         name: user.name,
         email: user.email,
         department: user.department,
@@ -72,7 +83,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', auth, async (req, res) => {
   try {
-    const [users] = await db.query('SELECT id, name, email, department, role FROM employees WHERE id = ?', [req.user.id]);
+    const [users] = await db.query('SELECT id, employee_id, name, email, department, role FROM employees WHERE id = ?', [req.user.id]);
     res.json(users[0]);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
