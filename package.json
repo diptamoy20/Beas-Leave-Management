@@ -11,7 +11,8 @@
     "build-client": "cd client && npm run build",
     "build": "npm run install-client && npm run build-client",
     "start": "node server/index.js",
-    "seed-holidays": "node server/seedHolidays.js"
+    "seed-holidays": "node server/seedHolidays.js",
+    "view-db": "node viewDatabase.js"
   },
   "keywords": [
     "leave",
@@ -21,6 +22,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "axios": "^1.13.6",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
