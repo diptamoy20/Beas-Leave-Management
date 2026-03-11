@@ -5,7 +5,10 @@ function Holidays() {
   const [holidays, setHolidays] = useState([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState(null);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({
     date: '',
     day: '',
@@ -27,6 +30,55 @@ function Holidays() {
       setHolidays(response.data);
     } catch (error) {
       console.error('Error fetching holidays:', error);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    e.preventDefault();
+    if (!uploadFile) {
+      alert('Please select a file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('year', selectedYear);
+
+      const response = await axios.post('/api/holidays/upload', formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      alert(response.data.message + (response.data.errors ? '\n\nErrors:\n' + response.data.errors.join('\n') : ''));
+      setShowUploadModal(false);
+      setUploadFile(null);
+      fetchHolidays();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleClearYear = async () => {
+    if (!window.confirm(`Are you sure you want to delete all holidays for ${selectedYear}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`/api/holidays/year/${selectedYear}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('All holidays deleted successfully');
+      fetchHolidays();
+    } catch (error) {
+      alert('Failed to delete holidays');
     }
   };
 
@@ -126,6 +178,12 @@ function Holidays() {
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
             + Add Holiday
           </button>
+          <button className="btn" style={{background: '#8b5cf6', color: 'white'}} onClick={() => setShowUploadModal(true)}>
+            📤 Upload Excel
+          </button>
+          <button className="btn btn-danger" onClick={handleClearYear}>
+            🗑️ Clear Year
+          </button>
           <button className="btn btn-success" onClick={exportToExcel}>
             📊 Export Excel
           </button>
@@ -210,6 +268,87 @@ function Holidays() {
           </table>
         </div>
       </div>
+
+      {showUploadModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="card" style={{width: '500px', maxWidth: '90%'}}>
+            <h2>Upload Holiday List</h2>
+            <p style={{color: '#6b7280', marginTop: '8px', fontSize: '14px'}}>
+              Upload an Excel file (.xlsx, .xls) or CSV file with holiday data
+            </p>
+            
+            <div style={{
+              background: '#f9fafb',
+              padding: '16px',
+              borderRadius: '8px',
+              marginTop: '16px',
+              fontSize: '13px',
+              color: '#374151'
+            }}>
+              <strong>Excel Format Required:</strong>
+              <ul style={{marginTop: '8px', marginLeft: '20px'}}>
+                <li>Column: DATE (e.g., 01/01/2026 or 2026-01-01)</li>
+                <li>Column: DAY (e.g., Monday)</li>
+                <li>Column: PURPOSE (e.g., New Year)</li>
+                <li>Column: TYPE (General or Restricted)</li>
+                <li>Column: NUMBER OF DAYS (e.g., 1)</li>
+              </ul>
+            </div>
+
+            <form onSubmit={handleFileUpload} style={{marginTop: '20px'}}>
+              <div className="form-group">
+                <label>Select Excel/CSV File</label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={(e) => setUploadFile(e.target.files[0])}
+                  required
+                  style={{padding: '8px'}}
+                />
+                {uploadFile && (
+                  <p style={{marginTop: '8px', fontSize: '13px', color: '#10b981'}}>
+                    ✓ Selected: {uploadFile.name}
+                  </p>
+                )}
+              </div>
+              
+              <div style={{display: 'flex', gap: '12px', marginTop: '20px'}}>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{flex: 1}}
+                  disabled={uploading}
+                >
+                  {uploading ? 'Uploading...' : '📤 Upload & Import'}
+                </button>
+                <button 
+                  type="button" 
+                  className="btn" 
+                  style={{flex: 1, background: '#6b7280', color: 'white'}}
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadFile(null);
+                  }}
+                  disabled={uploading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showAddModal && (
         <div style={{

@@ -26,27 +26,36 @@ function Register() {
   };
 
   return (
-    <div className="container" style={{maxWidth: '400px', marginTop: '50px'}}>
-      <div className="card">
-        <h2 style={{marginBottom: '20px', textAlign: 'center'}}>Register</h2>
-        {error && <div style={{color: 'red', marginBottom: '10px'}}>{error}</div>}
-        {success && <div style={{color: 'green', marginBottom: '10px'}}>{success}</div>}
-        <form onSubmit={handleSubmit}>
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <img 
+            src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
+            alt="BEAS Consultancy Logo" 
+          />
+          <h2>Create Account</h2>
+          <p>Join our leave management system</p>
+        </div>
+        {error && <div className="error-message">{error}</div>}
+        {success && <div className="success-message">{success}</div>}
+        <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label>Name</label>
+            <label>Full Name</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Enter your full name"
               required
             />
           </div>
           <div className="form-group">
-            <label>Email</label>
+            <label>Email Address</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({...formData, email: e.target.value})}
+              placeholder="Enter your email"
               required
             />
           </div>
@@ -56,6 +65,7 @@ function Register() {
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({...formData, password: e.target.value})}
+              placeholder="Create a password"
               required
             />
           </div>
@@ -65,6 +75,7 @@ function Register() {
               type="text"
               value={formData.department}
               onChange={(e) => setFormData({...formData, department: e.target.value})}
+              placeholder="Enter your department"
               required
             />
           </div>
@@ -78,13 +89,13 @@ function Register() {
               <option value="manager">Manager</option>
             </select>
           </div>
-          <button type="submit" className="btn btn-primary" style={{width: '100%'}}>
-            Register
+          <button type="submit" className="btn btn-primary" style={{width: '100%', marginTop: '8px'}}>
+            Create Account
           </button>
         </form>
-        <p style={{marginTop: '16px', textAlign: 'center'}}>
-          Already have an account? <Link to="/login">Login</Link>
-        </p>
+        <div className="auth-footer">
+          Already have an account? <Link to="/login">Sign In</Link>
+        </div>
       </div>
     </div>
   );

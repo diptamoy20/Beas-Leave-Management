@@ -32,8 +32,11 @@ function ApplyLeave() {
       <div className="top-bar">
         <h1>Apply for Leave</h1>
       </div>
-      <div className="card" style={{maxWidth: '600px'}}>
-        <h2 style={{marginBottom: '20px'}}>Leave Application Form</h2>
+      <div className="card" style={{maxWidth: '700px', margin: '0 auto'}}>
+        <div style={{marginBottom: '24px'}}>
+          <h2 style={{fontSize: '20px', marginBottom: '8px'}}>Leave Application Form</h2>
+          <p style={{color: '#6b7280', fontSize: '14px'}}>Fill in the details below to submit your leave request</p>
+        </div>
         {error && <div style={{color: 'red', marginTop: '10px'}}>{error}</div>}
         {success && <div style={{color: 'green', marginTop: '10px'}}>{success}</div>}
         

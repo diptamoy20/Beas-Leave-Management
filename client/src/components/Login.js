@@ -17,17 +17,25 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div className="container" style={{maxWidth: '400px', marginTop: '100px'}}>
-      <div className="card">
-        <h2 style={{marginBottom: '20px', textAlign: 'center'}}>Login</h2>
-        {error && <div style={{color: 'red', marginBottom: '10px'}}>{error}</div>}
-        <form onSubmit={handleSubmit}>
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <img 
+            src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
+            alt="BEAS Consultancy Logo" 
+          />
+          <h2>Welcome Back</h2>
+          <p>Sign in to your account to continue</p>
+        </div>
+        {error && <div className="error-message">{error}</div>}
+        <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label>Email</label>
+            <label>Email Address</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({...formData, email: e.target.value})}
+              placeholder="Enter your email"
               required
             />
           </div>
@@ -37,16 +45,17 @@ function Login({ onLogin }) {
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({...formData, password: e.target.value})}
+              placeholder="Enter your password"
               required
             />
           </div>
-          <button type="submit" className="btn btn-primary" style={{width: '100%'}}>
-            Login
+          <button type="submit" className="btn btn-primary" style={{width: '100%', marginTop: '8px'}}>
+            Sign In
           </button>
         </form>
-        <p style={{marginTop: '16px', textAlign: 'center'}}>
-          Don't have an account? <Link to="/register">Register</Link>
-        </p>
+        <div className="auth-footer">
+          Don't have an account? <Link to="/register">Create Account</Link>
+        </div>
       </div>
     </div>
   );

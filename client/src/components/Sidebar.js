@@ -9,7 +9,7 @@ function Sidebar({ user, onLogout }) {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <div style={{display: 'flex', alignItems: 'center', flexDirection:"column", gap: 'px'}}>
+        <div style={{display: 'flex', alignItems: 'center', flexDirection:"column", gap: '10px'}}>
           <img 
             src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
             alt="Logo" 
