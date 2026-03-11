@@ -9,8 +9,16 @@ function Sidebar({ user, onLogout }) {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h2>📊 P-HR</h2>
-        <p style={{fontSize: '12px', color: '#6b7280', marginTop: '4px'}}>Leave Management</p>
+        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+          <img 
+            src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
+            alt="Logo" 
+            style={{width: '40px', height: '40px', objectFit: 'contain'}}
+          />
+          <div>
+            <p style={{fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0'}}>Leave Management</p>
+          </div>
+        </div>
       </div>
       
       <ul className="sidebar-menu">
