@@ -1,24 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Card, Badge, Button } from 'react-bootstrap';
 import axios from 'axios';
+import DataTable from './common/DataTable';
 
-function ManageLeaves() {
+const ManageLeaves = () => {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchLeaves();
+    fetchAllLeaves();
   }, []);
 
-  const fetchLeaves = async () => {
+  const fetchAllLeaves = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get('/api/leaves/all', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setLeaves(response.data);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching leaves:', error);
+    } finally {
       setLoading(false);
     }
   };
@@ -26,91 +28,111 @@ function ManageLeaves() {
   const handleStatusUpdate = async (leaveId, status) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`/api/leaves/${leaveId}/status`, { status }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchLeaves();
+      await axios.put(
+        `/api/leaves/${leaveId}/status`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchAllLeaves();
     } catch (error) {
-      console.error('Error updating status:', error);
+      console.error('Error updating leave:', error);
     }
   };
 
-  const getBadgeClass = (status) => {
-    switch(status) {
-      case 'Pending': return 'badge-pending';
-      case 'Approved': return 'badge-approved';
-      case 'Rejected': return 'badge-rejected';
-      default: return '';
-    }
+  const getStatusBadge = (status) => {
+    const variants = {
+      Pending: 'warning',
+      Approved: 'success',
+      Rejected: 'danger',
+    };
+    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
   };
 
-  if (loading) return <div className="container">Loading...</div>;
+  const columns = [
+    {
+      name: 'Employee',
+      selector: (row) => row.employee_name,
+      sortable: true,
+      width: '150px',
+    },
+    {
+      name: 'Leave Type',
+      selector: (row) => row.leave_type,
+      sortable: true,
+      width: '130px',
+    },
+    {
+      name: 'Start Date',
+      selector: (row) => new Date(row.start_date).toLocaleDateString(),
+      sortable: true,
+      width: '120px',
+    },
+    {
+      name: 'End Date',
+      selector: (row) => new Date(row.end_date).toLocaleDateString(),
+      sortable: true,
+      width: '120px',
+    },
+    {
+      name: 'Reason',
+      selector: (row) => row.reason,
+      sortable: true,
+      grow: 2,
+    },
+    {
+      name: 'Status',
+      selector: (row) => row.status,
+      sortable: true,
+      width: '110px',
+      cell: (row) => getStatusBadge(row.status),
+    },
+    {
+      name: 'Actions',
+      width: '200px',
+      cell: (row) =>
+        row.status === 'Pending' ? (
+          <div className="d-flex gap-2">
+            <Button
+              size="sm"
+              variant="success"
+              onClick={() => handleStatusUpdate(row.id, 'Approved')}
+            >
+              Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => handleStatusUpdate(row.id, 'Rejected')}
+            >
+              Reject
+            </Button>
+          </div>
+        ) : (
+          <span className="text-muted">No action</span>
+        ),
+    },
+  ];
 
   return (
     <div>
-      <div className="top-bar">
-        <h1>Manage Leave Requests</h1>
-      </div>
-      
-      <div className="card">
-        {leaves.length === 0 ? (
-          <p>No leave requests found.</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Leave Type</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaves.map(leave => (
-                <tr key={leave.id}>
-                  <td>{leave.employee_name}</td>
-                  <td>{leave.department}</td>
-                  <td>{leave.leave_type}</td>
-                  <td>{new Date(leave.start_date).toLocaleDateString()}</td>
-                  <td>{new Date(leave.end_date).toLocaleDateString()}</td>
-                  <td>{leave.reason}</td>
-                  <td>
-                    <span className={`badge ${getBadgeClass(leave.status)}`}>
-                      {leave.status}
-                    </span>
-                  </td>
-                  <td>
-                    {leave.status === 'Pending' ? (
-                      <div className="action-icons">
-                        <button
-                          className="btn btn-success"
-                          onClick={() => handleStatusUpdate(leave.id, 'Approved')}
-                        >
-                          ✓ Approve
-                        </button>
-                        <button
-                          className="btn btn-danger"
-                          onClick={() => handleStatusUpdate(leave.id, 'Rejected')}
-                        >
-                          ✗ Reject
-                        </button>
-                      </div>
-                    ) : (
-                      <span>-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <h4 className="mb-4 dashboard-toggle">Manage Leave Requests</h4>
+      <Card className="dashboard-card">
+        <Card.Body>
+          {loading ? (
+            <div className="text-center py-5">Loading...</div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={leaves}
+              pagination
+              paginationPerPage={10}
+              paginationRowsPerPageOptions={[10, 20, 30]}
+            />
+          )}
+        </Card.Body>
+      </Card>
     </div>
   );
-}
+};
 
 export default ManageLeaves;

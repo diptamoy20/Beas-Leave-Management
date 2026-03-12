@@ -1,31 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { Card, Button, Row, Col } from 'react-bootstrap';
 import axios from 'axios';
+import DataTable from './common/DataTable';
 
-function Attendance() {
+const Attendance = () => {
   const [attendance, setAttendance] = useState([]);
-  const [todayAttendance, setTodayAttendance] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [clockedIn, setClockedIn] = useState(false);
 
   useEffect(() => {
     fetchAttendance();
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
   }, []);
 
   const fetchAttendance = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get('/api/attendance/my-attendance', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setAttendance(response.data);
       
-      const today = response.data.find(a => 
-        new Date(a.date).toDateString() === new Date().toDateString()
+      const today = response.data.find(
+        (a) => new Date(a.date).toDateString() === new Date().toDateString()
       );
-      setTodayAttendance(today);
+      setClockedIn(today && today.clock_in && !today.clock_out);
     } catch (error) {
       console.error('Error fetching attendance:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -33,11 +35,11 @@ function Attendance() {
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/attendance/clock-in', {}, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       fetchAttendance();
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to clock in');
+      console.error('Error clocking in:', error);
     }
   };
 
@@ -45,131 +47,92 @@ function Attendance() {
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/attendance/clock-out', {}, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       fetchAttendance();
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to clock out');
+      console.error('Error clocking out:', error);
     }
   };
 
-  const formatTime = (timeString) => {
-    if (!timeString) return '--:--';
-    return new Date(timeString).toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
-
-  const calculateWorkHours = (inTime, outTime) => {
-    if (!inTime || !outTime) return '--';
-    const diff = new Date(outTime) - new Date(inTime);
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
-  };
+  const columns = [
+    {
+      name: 'Date',
+      selector: (row) => new Date(row.date).toLocaleDateString(),
+      sortable: true,
+      width: '150px',
+    },
+    {
+      name: 'Clock In',
+      selector: (row) => row.clock_in ? new Date(row.clock_in).toLocaleTimeString() : '-',
+      sortable: true,
+    },
+    {
+      name: 'Clock Out',
+      selector: (row) => row.clock_out ? new Date(row.clock_out).toLocaleTimeString() : '-',
+      sortable: true,
+    },
+    {
+      name: 'Duration',
+      selector: (row) => {
+        if (row.clock_in && row.clock_out) {
+          const diff = new Date(row.clock_out) - new Date(row.clock_in);
+          const hours = Math.floor(diff / 3600000);
+          const minutes = Math.floor((diff % 3600000) / 60000);
+          return `${hours}h ${minutes}m`;
+        }
+        return '-';
+      },
+    },
+  ];
 
   return (
     <div>
-      <div className="top-bar">
-        <h1>Attendance</h1>
-        <div className="user-info">
-          <span style={{fontSize: '14px', color: '#6b7280'}}>
-            {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </span>
-        </div>
-      </div>
-
-      <div className="attendance-card">
-        <div className="attendance-info">
-          <h3>Current Time</h3>
-          <div className="attendance-time">
-            {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </div>
-          {todayAttendance && (
-            <div className="time-display">
-              <div className="time-item">
-                <div className="time-label">Clock In</div>
-                <div className="time-value">{formatTime(todayAttendance.clock_in)}</div>
+      <h4 className="mb-4 dashboard-toggle">Attendance</h4>
+      
+      <Row className="mb-4">
+        <Col lg={4}>
+          <Card className="dashboard-card text-center">
+            <Card.Body>
+              <h5 className="mb-3">Today's Attendance</h5>
+              <div className="d-flex gap-2 justify-content-center">
+                <Button
+                  variant="success"
+                  onClick={handleClockIn}
+                  disabled={clockedIn}
+                >
+                  Clock In
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleClockOut}
+                  disabled={!clockedIn}
+                >
+                  Clock Out
+                </Button>
               </div>
-              {todayAttendance.clock_out && (
-                <div className="time-item">
-                  <div className="time-label">Clock Out</div>
-                  <div className="time-value">{formatTime(todayAttendance.clock_out)}</div>
-                </div>
-              )}
-              {todayAttendance.clock_out && (
-                <div className="time-item">
-                  <div className="time-label">Work Hours</div>
-                  <div className="time-value">
-                    {calculateWorkHours(todayAttendance.clock_in, todayAttendance.clock_out)}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="attendance-actions">
-          {!todayAttendance && (
-            <button className="btn btn-clock" onClick={handleClockIn}>
-              🕐 Clock In
-            </button>
-          )}
-          {todayAttendance && !todayAttendance.clock_out && (
-            <button className="btn btn-clock" onClick={handleClockOut}>
-              🕐 Clock Out
-            </button>
-          )}
-          {todayAttendance && todayAttendance.clock_out && (
-            <div style={{color: 'white', fontSize: '14px', padding: '12px 24px', background: 'rgba(255,255,255,0.2)', borderRadius: '8px'}}>
-              ✅ Attendance marked for today
-            </div>
-          )}
-        </div>
-      </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
-      <div className="card">
-        <div className="card-header">
-          <h2>Attendance History</h2>
-        </div>
-        <div className="table-container">
-          {attendance.length === 0 ? (
-            <div className="empty-state">
-              <p>No attendance records found</p>
-            </div>
+      <Card className="dashboard-card">
+        <Card.Body>
+          <h5 className="mb-3">Attendance History</h5>
+          {loading ? (
+            <div className="text-center py-5">Loading...</div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Clock In</th>
-                  <th>Clock Out</th>
-                  <th>Work Hours</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendance.map(record => (
-                  <tr key={record.id}>
-                    <td>{new Date(record.date).toLocaleDateString()}</td>
-                    <td>{formatTime(record.clock_in)}</td>
-                    <td>{formatTime(record.clock_out)}</td>
-                    <td>{calculateWorkHours(record.clock_in, record.clock_out)}</td>
-                    <td>
-                      <span className={`badge ${record.clock_out ? 'badge-present' : 'badge-pending'}`}>
-                        {record.clock_out ? 'Complete' : 'In Progress'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={columns}
+              data={attendance}
+              pagination
+              paginationPerPage={10}
+            />
           )}
-        </div>
-      </div>
+        </Card.Body>
+      </Card>
     </div>
   );
-}
+};
 
 export default Attendance;

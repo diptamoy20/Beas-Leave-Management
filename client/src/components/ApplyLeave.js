@@ -1,93 +1,114 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
+import { useDispatch, useSelector } from 'react-redux';
+import { applyLeave } from '../store/slices/leaveSlice';
 
-function ApplyLeave() {
-  const navigate = useNavigate();
+const ApplyLeave = () => {
+  const dispatch = useDispatch();
+  const { loading } = useSelector((state) => state.leave);
+  
   const [formData, setFormData] = useState({
     leave_type: 'Casual Leave',
     start_date: '',
     end_date: '',
-    reason: ''
+    reason: '',
   });
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/leaves/apply', formData, {
-        headers: { Authorization: `Bearer ${token}` }
+      await dispatch(applyLeave(formData)).unwrap();
+      setSuccess(true);
+      setFormData({
+        leave_type: 'Casual Leave',
+        start_date: '',
+        end_date: '',
+        reason: '',
       });
-      setSuccess('Leave request submitted successfully!');
-      setTimeout(() => navigate('/my-leaves'), 2000);
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to submit leave request');
+      setError(err);
+      setTimeout(() => setError(''), 3000);
     }
   };
 
   return (
     <div>
-      <div className="top-bar">
-        <h1>Apply for Leave</h1>
-      </div>
-      <div className="card" style={{maxWidth: '700px', margin: '0 auto'}}>
-        <div style={{marginBottom: '24px'}}>
-          <h2 style={{fontSize: '20px', marginBottom: '8px'}}>Leave Application Form</h2>
-          <p style={{color: '#6b7280', fontSize: '14px'}}>Fill in the details below to submit your leave request</p>
-        </div>
-        {error && <div style={{color: 'red', marginTop: '10px'}}>{error}</div>}
-        {success && <div style={{color: 'green', marginTop: '10px'}}>{success}</div>}
-        
-        <form onSubmit={handleSubmit} style={{marginTop: '20px'}}>
-          <div className="form-group">
-            <label>Leave Type</label>
-            <select
-              value={formData.leave_type}
-              onChange={(e) => setFormData({...formData, leave_type: e.target.value})}
-            >
-              <option value="Casual Leave">Casual Leave</option>
-              <option value="Sick Leave">Sick Leave</option>
-              <option value="Paid Leave">Paid Leave</option>
-            </select>
-          </div>
+      <h4 className="mb-4 dashboard-toggle">Apply for Leave</h4>
+      <Row>
+        <Col lg={8}>
+          <Card className="dashboard-card">
+            <Card.Body>
+              {success && <Alert variant="success">Leave application submitted successfully!</Alert>}
+              {error && <Alert variant="danger">{error}</Alert>}
 
-          <div className="form-group">
-            <label>Start Date</label>
-            <input
-              type="date"
-              value={formData.start_date}
-              onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-              required
-            />
-          </div>
+              <Form onSubmit={handleSubmit}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Leave Type</Form.Label>
+                  <Form.Select
+                    value={formData.leave_type}
+                    onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
+                    required
+                  >
+                    <option value="Casual Leave">Casual Leave</option>
+                    <option value="Sick Leave">Sick Leave</option>
+                    <option value="Paid Leave">Paid Leave</option>
+                  </Form.Select>
+                </Form.Group>
 
-          <div className="form-group">
-            <label>End Date</label>
-            <input
-              type="date"
-              value={formData.end_date}
-              onChange={(e) => setFormData({...formData, end_date: e.target.value})}
-              required
-            />
-          </div>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Start Date</Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={formData.start_date}
+                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>End Date</Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={formData.end_date}
+                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
 
-          <div className="form-group">
-            <label>Reason</label>
-            <textarea
-              value={formData.reason}
-              onChange={(e) => setFormData({...formData, reason: e.target.value})}
-              rows="4"
-              required
-            />
-          </div>
+                <Form.Group className="mb-3">
+                  <Form.Label>Reason</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={4}
+                    placeholder="Enter reason for leave"
+                    value={formData.reason}
+                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                    required
+                  />
+                </Form.Group>
 
-          <button type="submit" className="btn btn-primary" style={{width: '100%'}}>Submit Request</button>
-        </form>
-      </div>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  style={{ background: '#405189', border: 'none' }}
+                >
+                  {loading ? 'Submitting...' : 'Submit Leave Request'}
+                </Button>
+              </Form>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
-}
+};
 
 export default ApplyLeave;

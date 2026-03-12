@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Card, Row, Col, ProgressBar } from 'react-bootstrap';
 import axios from 'axios';
+import { FiCalendar } from 'react-icons/fi';
 
-function LeaveBalance() {
+const LeaveBalance = () => {
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -13,56 +15,94 @@ function LeaveBalance() {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get('/api/leaves/balance', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       setBalance(response.data);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching balance:', error);
+    } finally {
       setLoading(false);
     }
   };
 
-  if (loading) return <div className="container">Loading...</div>;
+  const leaveTypes = [
+    {
+      name: 'Casual Leave',
+      available: balance?.casual_leave || 0,
+      total: 12,
+      color: '#405189',
+    },
+    {
+      name: 'Sick Leave',
+      available: balance?.sick_leave || 0,
+      total: 10,
+      color: '#0ab39c',
+    },
+    {
+      name: 'Paid Leave',
+      available: balance?.paid_leave || 0,
+      total: 15,
+      color: '#f7b84b',
+    },
+  ];
+
+  if (loading) {
+    return <div className="text-center py-5">Loading...</div>;
+  }
 
   return (
     <div>
-      <div className="top-bar">
-        <h1>Leave Balance</h1>
-      </div>
+      <h4 className="mb-4 dashboard-toggle">Leave Balance</h4>
       
-      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '30px'}}>
-        <div className="card" style={{background: '#e3f2fd'}}>
-          <h3>Casual Leave</h3>
-          <p style={{fontSize: '48px', fontWeight: 'bold', margin: '20px 0'}}>{balance?.casual_leave || 0}</p>
-          <p>days remaining</p>
-        </div>
-        
-        <div className="card" style={{background: '#f3e5f5'}}>
-          <h3>Sick Leave</h3>
-          <p style={{fontSize: '48px', fontWeight: 'bold', margin: '20px 0'}}>{balance?.sick_leave || 0}</p>
-          <p>days remaining</p>
-        </div>
-        
-        <div className="card" style={{background: '#e8f5e9'}}>
-          <h3>Paid Leave</h3>
-          <p style={{fontSize: '48px', fontWeight: 'bold', margin: '20px 0'}}>{balance?.paid_leave || 0}</p>
-          <p>days remaining</p>
-        </div>
-      </div>
+      <Row>
+        {leaveTypes.map((leave, index) => (
+          <Col key={index} lg={4} md={6} className="mb-4">
+            <Card className="dashboard-card">
+              <Card.Body>
+                <div
+                  className="card-icon"
+                  style={{ background: `${leave.color}15`, color: leave.color }}
+                >
+                  <FiCalendar />
+                </div>
+                <h5 className="mb-3">{leave.name}</h5>
+                <div className="d-flex justify-content-between mb-2">
+                  <span>Available</span>
+                  <strong>{leave.available} / {leave.total}</strong>
+                </div>
+                <ProgressBar
+                  now={(leave.available / leave.total) * 100}
+                  style={{ height: '8px', background: `${leave.color}20` }}
+                  variant="custom"
+                >
+                  <div
+                    style={{
+                      width: `${(leave.available / leave.total) * 100}%`,
+                      background: leave.color,
+                      height: '100%',
+                    }}
+                  />
+                </ProgressBar>
+              </Card.Body>
+            </Card>
+          </Col>
+        ))}
+      </Row>
 
-      <div className="card" style={{marginTop: '30px'}}>
-        <h3>Leave Policy</h3>
-        <ul style={{marginTop: '15px', lineHeight: '1.8'}}>
-          <li>Casual Leave: 12 days per year</li>
-          <li>Sick Leave: 10 days per year</li>
-          <li>Paid Leave: 15 days per year</li>
-          <li>Leave requests must be submitted at least 2 days in advance</li>
-          <li>Manager approval required for all leave requests</li>
-        </ul>
-      </div>
+      <Card className="dashboard-card">
+        <Card.Body>
+          <h5 className="mb-3">Leave Policy</h5>
+          <ul className="mb-0">
+            <li className="mb-2">Casual Leave: 12 days per year</li>
+            <li className="mb-2">Sick Leave: 10 days per year</li>
+            <li className="mb-2">Paid Leave: 15 days per year</li>
+            <li className="mb-2">Leaves can be carried forward to next year (max 5 days)</li>
+            <li>Apply for leave at least 2 days in advance</li>
+          </ul>
+        </Card.Body>
+      </Card>
     </div>
   );
-}
+};
 
 export default LeaveBalance;
