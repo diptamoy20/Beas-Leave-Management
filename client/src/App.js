@@ -4,7 +4,6 @@ import { useSelector } from 'react-redux';
 import Sidebar from './components/layout/Sidebar';
 import Navbar from './components/layout/Navbar';
 import Login from './components/auth/Login';
-import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
 import ApplyLeave from './components/ApplyLeave';
 import MyLeaves from './components/MyLeaves';
@@ -31,7 +30,6 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         
         <Route
           path="/*"
