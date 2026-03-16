@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Form, Button, Alert, Modal } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { login, clearError } from '../../store/slices/authSlice';
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import axios from 'axios';
 
 const Login = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { loading, error, user } = useSelector((state) => state.auth);
-  
+
   const [formData, setFormData] = useState({
     identifier: '',
     password: '',
@@ -24,6 +25,7 @@ const Login = () => {
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -58,7 +60,7 @@ const Login = () => {
         identifier: resetData.identifier,
         newPassword: resetData.newPassword
       });
-      
+
       setResetSuccess(response.data.message);
       setTimeout(() => {
         setShowResetModal(false);
@@ -100,18 +102,36 @@ const Login = () => {
 
           <Form.Group className="mb-3">
             <Form.Label>Password</Form.Label>
-            <Form.Control
-              type="password"
-              placeholder="Enter your password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              required
-            />
+
+            <div style={{ position: "relative" }}>
+              <Form.Control
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+                required
+              />
+
+              <span
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  cursor: "pointer"
+                }}
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
           </Form.Group>
 
           <div className="text-end mb-3">
-            <Button 
-              variant="link" 
+            <Button
+              variant="link"
               className="p-0"
               onClick={() => setShowResetModal(true)}
               style={{ textDecoration: 'none', color: '#405189' }}
@@ -140,7 +160,7 @@ const Login = () => {
         <Modal.Body>
           {resetError && <Alert variant="danger">{resetError}</Alert>}
           {resetSuccess && <Alert variant="success">{resetSuccess}</Alert>}
-          
+
           <Form onSubmit={handleResetPassword}>
             <Form.Group className="mb-3">
               <Form.Label>Email or Employee ID</Form.Label>
