@@ -6,11 +6,12 @@ const router = express.Router();
 
 router.post('/apply', auth, async (req, res) => {
   try {
-    const { leave_type, start_date, end_date, reason } = req.body;
-    
+
+    const {employee_id, leave_type, start_date, end_date, no_of_days, reason, manager_id } = req.body;
+
     const [result] = await db.run(
-      'INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, reason, status) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.user.id, leave_type, start_date, end_date, reason, 'Pending']
+      'INSERT INTO leave_requests (employee_id, manager_id, leave_type, start_date, end_date, no_of_days, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [employee_id, manager_id || null, leave_type, start_date, end_date, no_of_days, reason, 'Pending']
     );
 
     res.status(201).json({ message: 'Leave request submitted', id: result.insertId });
@@ -19,12 +20,53 @@ router.post('/apply', auth, async (req, res) => {
   }
 });
 
+// router.get('/my-leaves', auth, async (req, res) => {
+//   try {
+//     const [leaves] = await db.query(
+//       'SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC',
+//       [req.user.employee_id]
+//     );
+//     res.json(leaves);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
+
+// router.get('/my-leaves', auth, async (req, res) => {
+//   try {
+
+//     const [leaves] = await db.query(
+//       'SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC',
+//       [req.user.employee_id]
+//     );
+
+//     const [balance] = await db.query(
+//       'SELECT earned_leave FROM leave_balance WHERE employee_id = ?',
+//       [req.user.employee_id]
+//     );
+
+//     res.json({
+//       leave_balance: balance[0]?.earned_leave || 0,
+//       leaves: leaves
+//     });
+
+//   } catch (error) {
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
+
 router.get('/my-leaves', auth, async (req, res) => {
   try {
     const [leaves] = await db.query(
-      'SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC',
-      [req.user.id]
+      `SELECT lr.*, lb.earned_leave
+       FROM leave_requests lr
+       LEFT JOIN leave_balance lb
+       ON lr.employee_id = lb.employee_id
+       WHERE lr.employee_id = ?
+       ORDER BY lr.created_at DESC`,
+      [req.user.employee_id]
     );
+
     res.json(leaves);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -35,9 +77,9 @@ router.get('/balance', auth, async (req, res) => {
   try {
     const [balance] = await db.query(
       'SELECT * FROM leave_balance WHERE employee_id = ?',
-      [req.user.id]
+      [req.user.employee_id]
     );
-    res.json(balance[0] || { casual_leave: 0, sick_leave: 0, paid_leave: 0 });
+    res.json(balance[0] || { earned_leave: 0 });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -46,9 +88,9 @@ router.get('/balance', auth, async (req, res) => {
 router.get('/all', auth, isManager, async (req, res) => {
   try {
     const [leaves] = await db.query(
-      `SELECT lr.*, e.name as employee_name, e.department 
+      `SELECT lr.*, e.name as employee_name, e.designation 
        FROM leave_requests lr 
-       JOIN employees e ON lr.employee_id = e.id 
+       JOIN employees e ON lr.employee_id = e.employee_id 
        ORDER BY lr.created_at DESC`
     );
     res.json(leaves);
@@ -71,21 +113,12 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
 
     if (status === 'Approved') {
       const leaveData = leave[0];
-      const days = Math.ceil((new Date(leaveData.end_date) - new Date(leaveData.start_date)) / (1000 * 60 * 60 * 24)) + 1;
-      
-      const leaveTypeMap = {
-        'Casual Leave': 'casual_leave',
-        'Sick Leave': 'sick_leave',
-        'Paid Leave': 'paid_leave'
-      };
-      
-      const column = leaveTypeMap[leaveData.leave_type];
-      if (column) {
-        await db.run(
-          `UPDATE leave_balance SET ${column} = ${column} - ? WHERE employee_id = ?`,
-          [days, leaveData.employee_id]
-        );
-      }
+      const days = leaveData.no_of_days;
+
+      await db.run(
+        `UPDATE leave_balance SET earned_leave = earned_leave - ? WHERE employee_id = ?`,
+        [days, leaveData.employee_id]
+      );
     }
 
     res.json({ message: 'Leave status updated' });

@@ -25,12 +25,12 @@ const ManageLeaves = () => {
     }
   };
 
-  const handleStatusUpdate = async (leaveId, status) => {
+  const handleStatusUpdate = async (leaveId, noOfDays, status) => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
         `/api/leaves/${leaveId}/status`,
-        { status },
+        { noOfDays, status },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       fetchAllLeaves();
@@ -53,7 +53,7 @@ const ManageLeaves = () => {
       name: 'Employee',
       selector: (row) => row.employee_name,
       sortable: true,
-      width: '150px',
+      width: '200px',
     },
     {
       name: 'Leave Type',
@@ -63,13 +63,19 @@ const ManageLeaves = () => {
     },
     {
       name: 'Start Date',
-      selector: (row) => new Date(row.start_date).toLocaleDateString(),
+      selector: (row) => new Date(row.start_date).toLocaleDateString('en-GB'),
       sortable: true,
       width: '120px',
     },
     {
       name: 'End Date',
-      selector: (row) => new Date(row.end_date).toLocaleDateString(),
+      selector: (row) => new Date(row.end_date).toLocaleDateString('en-GB'),
+      sortable: true,
+      width: '120px',
+    },
+    {
+      name: 'No of Days',
+      selector: (row) => row.no_of_days,
       sortable: true,
       width: '120px',
     },
@@ -95,14 +101,14 @@ const ManageLeaves = () => {
             <Button
               size="sm"
               variant="success"
-              onClick={() => handleStatusUpdate(row.id, 'Approved')}
+              onClick={() => handleStatusUpdate(row.id, row.no_of_days, 'Approved')}
             >
               Approve
             </Button>
             <Button
               size="sm"
               variant="danger"
-              onClick={() => handleStatusUpdate(row.id, 'Rejected')}
+              onClick={() => handleStatusUpdate(row.id, row.no_of_days, 'Rejected')}
             >
               Reject
             </Button>

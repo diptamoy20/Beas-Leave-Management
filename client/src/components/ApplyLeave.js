@@ -1,39 +1,113 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { applyLeave } from '../store/slices/leaveSlice';
+import { fetchEmployees } from '../store/slices/empSlice';
+import { fetchHolidays } from '../store/slices/holidaySlice';
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const ApplyLeave = () => {
   const dispatch = useDispatch();
   const { loading } = useSelector((state) => state.leave);
-  
+  const { user } = useSelector((state) => state.auth);
+  const { employees, loading: employeesLoading } = useSelector((state) => state.employees);  
+  const { holidays } = useSelector((state) => state.holiday);
+
   const [formData, setFormData] = useState({
-    leave_type: 'Casual Leave',
-    start_date: '',
-    end_date: '',
+    employee_id: user?.employee_id,
+    leave_type: 'Earned Leave',
+    start_date: null,
+    end_date: null,
+    no_of_days: '',
     reason: '',
+    manager_id: '',
   });
+  const [includeRestricted, setIncludeRestricted] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    dispatch(fetchEmployees());
+    dispatch(fetchHolidays());
+  }, []);
+
+  // Calculate no_of_days whenever dates or includeRestricted changes
+  useEffect(() => {    
+    const { start_date, end_date } = formData;
+    if (!start_date || !end_date) {
+      setFormData((prev) => ({ ...prev, no_of_days: '' }));
+      return;
+    }
+
+    const restrictedDates = new Set(
+      holidays
+        .filter((h) => h.type === 'Restricted')
+        .map((h) => h.date.split('T')[0])
+    );
+
+    let count = 0;
+    const current = new Date(start_date);
+    const end = new Date(end_date);
+
+    while (current <= end) {
+      const day = current.getDay();
+      const dateStr = current.toISOString().split('T')[0];
+      const isWeekend = day === 0 || day === 6;
+      const isRestricted = restrictedDates.has(dateStr);
+
+      if (!isWeekend) {
+        if (isRestricted) {
+          if (includeRestricted) count++;
+          // else skip
+        } else {
+          count++;
+        }
+      }
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    setFormData((prev) => ({ ...prev, no_of_days: count }));
+  }, [formData.start_date, formData.end_date, includeRestricted, holidays]);
+
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toISOString().split('T')[0];
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await dispatch(applyLeave(formData)).unwrap();
+      await dispatch(applyLeave({
+        ...formData,
+        start_date: formatDate(formData.start_date),
+        end_date: formatDate(formData.end_date),
+      })).unwrap();
       setSuccess(true);
       setFormData({
-        leave_type: 'Casual Leave',
+        employee_id: user?.employee_id,
+        leave_type: 'Earned Leave',
         start_date: '',
         end_date: '',
+        no_of_days: '',
         reason: '',
+        manager_id: '',
       });
+      setIncludeRestricted(false);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError(err);
+      const msg = typeof err === 'string' ? err : err?.message || "Something went wrong";
+      setError(msg);
       setTimeout(() => setError(''), 3000);
     }
   };
 
+  const isWeekday = (date) => {
+    const day = date.getDay();
+    return day !== 0 && day !== 6;
+  };
   return (
     <div>
       <h4 className="mb-4 dashboard-toggle">Apply for Leave</h4>
@@ -43,45 +117,96 @@ const ApplyLeave = () => {
             <Card.Body>
               {success && <Alert variant="success">Leave application submitted successfully!</Alert>}
               {error && <Alert variant="danger">{error}</Alert>}
-
               <Form onSubmit={handleSubmit}>
                 <Form.Group className="mb-3">
                   <Form.Label>Leave Type</Form.Label>
-                  <Form.Select
+                  <Form.Control
+                    type="text"
+                    placeholder="Leave Type"
                     value={formData.leave_type}
-                    onChange={(e) => setFormData({ ...formData, leave_type: e.target.value })}
-                    required
-                  >
-                    <option value="Casual Leave">Casual Leave</option>
-                    <option value="Sick Leave">Sick Leave</option>
-                    <option value="Paid Leave">Paid Leave</option>
-                  </Form.Select>
+                    // onChange={(e) => setFormData({ ...formData, leave_type: 'Earned Leave' })}
+                    disabled
+                  />
                 </Form.Group>
 
                 <Row>
-                  <Col md={6}>
+                  <Col>
                     <Form.Group className="mb-3">
                       <Form.Label>Start Date</Form.Label>
-                      <Form.Control
-                        type="date"
-                        value={formData.start_date}
-                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        required
+                      <DatePicker
+                        selected={formData.start_date ? new Date(formData.start_date) : null}
+                        onChange={(date) =>
+                          setFormData({ ...formData, start_date: date })
+                        }
+                        filterDate={isWeekday}
+                        dateFormat="dd-MM-yyyy"
+                        className="form-control"
+                        placeholderText="Select start date"
                       />
                     </Form.Group>
                   </Col>
-                  <Col md={6}>
+
+                  <Col>
                     <Form.Group className="mb-3">
                       <Form.Label>End Date</Form.Label>
-                      <Form.Control
-                        type="date"
-                        value={formData.end_date}
-                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                        required
+                      <DatePicker
+                        selected={formData.end_date ? new Date(formData.end_date) : null}
+                        onChange={(date) =>
+                          setFormData({ ...formData, end_date: date })
+                        }
+                        filterDate={isWeekday}
+                        minDate={formData.start_date}
+                        dateFormat="dd-MM-yyyy"
+                        className="form-control"
+                        placeholderText="Select end date"
                       />
                     </Form.Group>
                   </Col>
                 </Row>
+
+                <Row>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>No of Days</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="No of Days"
+                        value={formData.no_of_days}
+                        // onChange={(e) => setFormData({ ...formData, leave_type: 'Earned Leave' })}
+                        disabled
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Include Restricted Holiday</Form.Label>
+                      <Form.Select
+                        value={includeRestricted ? 'yes' : 'no'}
+                        onChange={(e) => setIncludeRestricted(e.target.value === 'yes')}
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Leave Approver</Form.Label>
+                  <Form.Select
+                    value={formData.manager_id}
+                    onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Select approver</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.employee_id}>
+                        {emp.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+
 
                 <Form.Group className="mb-3">
                   <Form.Label>Reason</Form.Label>

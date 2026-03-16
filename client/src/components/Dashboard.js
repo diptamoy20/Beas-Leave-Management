@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { Row, Col, Card, Badge, Spinner } from 'react-bootstrap';
 import { useSelector, useDispatch } from 'react-redux';
 import { FiCalendar, FiCheckCircle, FiClock, FiTrendingUp } from 'react-icons/fi';
-import { fetchLeaves } from '../store/slices/leaveSlice';
+import { balanceLeave, fetchLeaves } from '../store/slices/leaveSlice';
 import { fetchHolidays } from '../store/slices/holidaySlice';
 
 const Dashboard = () => {
@@ -16,11 +16,24 @@ const Dashboard = () => {
     dispatch(fetchHolidays());
   }, [dispatch]);
 
+  // const fetchBalance = async () => {
+  //   try {
+  //     const token = localStorage.getItem('token');
+  //     const response = await axios.get('/api/leaves/balance', {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     setBalance(response.data);
+  //   } catch (error) {
+  //     console.error('Error fetching balance:', error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   // Calculate stats from actual data
   const stats = useMemo(() => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    
+
     const monthlyLeaves = leaves.filter(leave => {
       const leaveDate = new Date(leave.start_date);
       return leaveDate.getMonth() === currentMonth && leaveDate.getFullYear() === currentYear;
@@ -31,7 +44,7 @@ const Dashboard = () => {
     const rejected = leaves.filter(l => l.status === 'rejected').length;
 
     return {
-      total: leaves.length,
+      total: leaves[0]?.earned_leave,
       approved,
       pending,
       rejected,
@@ -50,7 +63,7 @@ const Dashboard = () => {
   const upcomingHolidays = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     return holidays
       .filter(holiday => new Date(holiday.date) >= today)
       .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -61,7 +74,7 @@ const Dashboard = () => {
   const monthlyStats = useMemo(() => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    
+
     const monthlyLeaves = leaves.filter(leave => {
       const leaveDate = new Date(leave.start_date);
       return leaveDate.getMonth() === currentMonth && leaveDate.getFullYear() === currentYear;
@@ -112,8 +125,8 @@ const Dashboard = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', { 
-      month: 'short', 
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
@@ -122,7 +135,7 @@ const Dashboard = () => {
   // Simple SVG Pie Chart Component
   const PieChart = ({ data }) => {
     const { approved, pending, rejected, total } = data;
-    
+
     if (total === 0) {
       return (
         <div className="text-center py-4">
@@ -190,10 +203,10 @@ const Dashboard = () => {
           {slices.map((slice, index) => (
             <div key={index} className="d-flex align-items-center justify-content-between mb-2">
               <div className="d-flex align-items-center">
-                <div 
-                  style={{ 
-                    width: '12px', 
-                    height: '12px', 
+                <div
+                  style={{
+                    width: '12px',
+                    height: '12px',
                     backgroundColor: slice.color,
                     borderRadius: '2px',
                     marginRight: '8px'
@@ -212,7 +225,7 @@ const Dashboard = () => {
   return (
     <div>
       <h4 className="mb-4 dashboard-toggle">Dashboard</h4>
-      
+
       <Row>
         {statsCards.map((card, index) => (
           <Col key={index} xl={3} md={6} className="mb-4">

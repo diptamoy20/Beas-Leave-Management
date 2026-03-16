@@ -25,10 +25,23 @@ export const applyLeave = createAsyncThunk('leave/applyLeave', async (leaveData,
   }
 });
 
+export const balanceLeave = createAsyncThunk('leaveBalance/balanceLeave', async (_, { rejectWithValue }) => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.get('/api/leaves/balance', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Failed to fetch leave balance');
+  }
+});
+
 const leaveSlice = createSlice({
   name: 'leave',
   initialState: {
     leaves: [],
+    leaveBalance: null,
     loading: false,
     error: null,
   },
@@ -50,9 +63,28 @@ const leaveSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
+      .addCase(applyLeave.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(applyLeave.fulfilled, (state, action) => {
+        state.loading = false;
         state.leaves.push(action.payload);
-      });
+      })
+      .addCase(applyLeave.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(balanceLeave.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(balanceLeave.fulfilled, (state, action) => {
+        state.loading = false;
+        state.leaveBalance = action.payload;
+      })
+      .addCase(balanceLeave.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });;
   },
 });
 

@@ -4,11 +4,18 @@ const { auth, isManager } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/', auth, isManager, async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
-    const [employees] = await db.query(
-      'SELECT e.id, e.name, e.email, e.department, e.role, lb.casual_leave, lb.sick_leave, lb.paid_leave FROM employees e LEFT JOIN leave_balance lb ON e.id = lb.employee_id'
-    );
+    let query = "SELECT e.id, e.name, e.email, e.designation, e.employee_id, e.role FROM employees e";
+    let params = [];
+
+    if (req.user.role !== 'manager' && req.user.role !== 'admin') {
+      query += " WHERE e.role = ?";
+      params.push('manager');
+    }
+
+    const [employees] = await db.query(query, params);
+
     res.json(employees);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
