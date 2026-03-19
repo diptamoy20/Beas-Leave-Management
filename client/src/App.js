@@ -11,6 +11,7 @@ import Attendance from './components/Attendance';
 import Holidays from './components/Holidays';
 import LeaveBalance from './components/LeaveBalance';
 import ManageLeaves from './components/ManageLeaves';
+import LeaveRecords from './components/LeaveRecords';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/theme.css';
 
@@ -48,6 +49,7 @@ function App() {
                       <Route path="/holidays" element={<Holidays />} />
                       <Route path="/leave-balance" element={<LeaveBalance />} />
                       <Route path="/manage-leaves" element={<ManageLeaves />} />
+                      <Route path="/leave-records" element={<LeaveRecords />} />
                       <Route path="/" element={<Navigate to="/dashboard" />} />
                     </Routes>
                   </div>

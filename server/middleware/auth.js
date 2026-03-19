@@ -23,4 +23,11 @@ const isManager = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, isManager };
+const isAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied. Admin role required.' });
+  }
+  next();
+};
+
+module.exports = { auth, isManager, isAdmin };

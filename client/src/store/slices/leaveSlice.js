@@ -57,7 +57,8 @@ const leaveSlice = createSlice({
       })
       .addCase(fetchLeaves.fulfilled, (state, action) => {
         state.loading = false;
-        state.leaves = action.payload;
+        state.leaves = action.payload.leaves;
+        state.leaveBalance = action.payload.earned_leave;
       })
       .addCase(fetchLeaves.rejected, (state, action) => {
         state.loading = false;

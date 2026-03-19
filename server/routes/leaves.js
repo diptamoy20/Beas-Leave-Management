@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { auth, isManager } = require('../middleware/auth');
+const { auth, isManager, isAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -58,18 +58,21 @@ router.post('/apply', auth, async (req, res) => {
 router.get('/my-leaves', auth, async (req, res) => {
   try {
     const [leaves] = await db.query(
-      `SELECT lr.*, lb.earned_leave
-       FROM leave_requests lr
-       LEFT JOIN leave_balance lb
-       ON lr.employee_id = lb.employee_id
-       WHERE lr.employee_id = ?
-       ORDER BY lr.created_at DESC`,
+      `SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC`,
       [req.user.employee_id]
     );
 
-    res.json(leaves);
+    const [balance] = await db.query(
+      `SELECT earned_leave FROM leave_balance WHERE employee_id = ?`,
+      [req.user.employee_id]
+    );
+
+    res.json({
+      leaves,
+      earned_leave: balance[0]?.earned_leave ?? 0
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -87,11 +90,15 @@ router.get('/balance', auth, async (req, res) => {
 
 router.get('/all', auth, isManager, async (req, res) => {
   try {
+    const approverEmployeeId = req.user.employee_id;
     const [leaves] = await db.query(
       `SELECT lr.*, e.name as employee_name, e.designation 
        FROM leave_requests lr 
        JOIN employees e ON lr.employee_id = e.employee_id 
+       WHERE lr.manager_id = ?
        ORDER BY lr.created_at DESC`
+      ,
+      [approverEmployeeId]
     );
     res.json(leaves);
   } catch (error) {
@@ -109,6 +116,11 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
       return res.status(404).json({ message: 'Leave request not found' });
     }
 
+    const approverEmployeeId = req.user.employee_id;
+    if (String(leave[0].manager_id) !== String(approverEmployeeId)) {
+      return res.status(403).json({ message: 'Access denied. This leave request is not assigned to you.' });
+    }
+
     await db.run('UPDATE leave_requests SET status = ? WHERE id = ?', [status, id]);
 
     if (status === 'Approved') {
@@ -122,6 +134,21 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
     }
 
     res.json({ message: 'Leave status updated' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+router.get('/approved', auth, isAdmin, async (req, res) => {
+  try {
+    const [leaves] = await db.query(
+      `SELECT lr.*, e.name as employee_name, e.employee_id as emp_id, e.designation
+       FROM leave_requests lr
+       JOIN employees e ON lr.employee_id = e.employee_id
+       WHERE lr.status = 'Approved'
+       ORDER BY lr.created_at DESC`
+    );
+    res.json(leaves);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

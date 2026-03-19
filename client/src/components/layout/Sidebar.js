@@ -23,9 +23,15 @@ const Sidebar = () => {
     // { path: '/leave-balance', icon: <FiCheckSquare />, label: 'Leave Balance' },
   ];
 
-  if (user?.role === 'manager') {
+  if (user?.role === 'manager' || user?.role === 'admin') {
     menuItems.push(
       { path: '/manage-leaves', icon: <FiUsers />, label: 'Manage Leaves' }
+    );
+  }
+
+  if (user?.role === 'admin') {
+    menuItems.push(
+      { path: '/leave-records', icon: <FiCheckSquare />, label: 'Leave Records' }
     );
   }
 

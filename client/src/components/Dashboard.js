@@ -8,7 +8,7 @@ import { fetchHolidays } from '../store/slices/holidaySlice';
 const Dashboard = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { leaves, loading: leavesLoading } = useSelector((state) => state.leave);
+  const { leaves, leaveBalance, loading: leavesLoading } = useSelector((state) => state.leave);
   const { holidays, loading: holidaysLoading } = useSelector((state) => state.holiday);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ const Dashboard = () => {
     const rejected = leaves.filter(l => l.status === 'rejected').length;
 
     return {
-      total: leaves[0]?.earned_leave,
+      total: leaveBalance,
       approved,
       pending,
       rejected,

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
-import { applyLeave } from '../store/slices/leaveSlice';
+import { applyLeave, fetchLeaves } from '../store/slices/leaveSlice';
 import { fetchEmployees } from '../store/slices/empSlice';
 import { fetchHolidays } from '../store/slices/holidaySlice';
 import DatePicker from "react-datepicker";
@@ -13,6 +13,7 @@ const ApplyLeave = () => {
   const { user } = useSelector((state) => state.auth);
   const { employees, loading: employeesLoading } = useSelector((state) => state.employees);  
   const { holidays } = useSelector((state) => state.holiday);
+  const { leaves } = useSelector((state) => state.leave);
 
   const [formData, setFormData] = useState({
     employee_id: user?.employee_id,
@@ -30,7 +31,48 @@ const ApplyLeave = () => {
   useEffect(() => {
     dispatch(fetchEmployees());
     dispatch(fetchHolidays());
-  }, []);
+    dispatch(fetchLeaves());
+  }, [dispatch]);
+
+  const toYmd = (d) => {
+    if (!d) return '';
+    return new Date(d).toISOString().slice(0, 10);
+  };
+
+  const generalHolidayDates = useMemo(() => {
+    return new Set(
+      (holidays || [])
+        .filter((h) => h.type === 'General')
+        .map((h) => String(h.date).split('T')[0])
+    );
+  }, [holidays]);
+
+  const restrictedHolidayDates = useMemo(() => {
+    return new Set(
+      (holidays || [])
+        .filter((h) => h.type === 'Restricted')
+        .map((h) => String(h.date).split('T')[0])
+    );
+  }, [holidays]);
+
+  const blockedLeaveDates = useMemo(() => {
+    const set = new Set();
+    (leaves || [])
+      .filter((l) => l.status === 'Pending' || l.status === 'Approved')
+      .forEach((l) => {
+        const start = new Date(l.start_date);
+        const end = new Date(l.end_date);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+
+        const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+        const endUtc = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+        while (cursor <= endUtc) {
+          set.add(toYmd(cursor));
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
+      });
+    return set;
+  }, [leaves]);
 
   // Calculate no_of_days whenever dates or includeRestricted changes
   useEffect(() => {    
@@ -71,11 +113,7 @@ const ApplyLeave = () => {
     setFormData((prev) => ({ ...prev, no_of_days: count }));
   }, [formData.start_date, formData.end_date, includeRestricted, holidays]);
 
-  const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toISOString().split('T')[0];
-  };
+  const formatDate = (date) => toYmd(date);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -104,9 +142,26 @@ const ApplyLeave = () => {
     }
   };
 
-  const isWeekday = (date) => {
+  const isWeekend = (date) => {
     const day = date.getDay();
-    return day !== 0 && day !== 6;
+    return day === 0 || day === 6;
+  };
+
+  const isSelectableDate = (date) => {
+    if (isWeekend(date)) return false;
+    const key = toYmd(date);
+    if (generalHolidayDates.has(key)) return false;
+    if (restrictedHolidayDates.has(key) && !includeRestricted) return false;
+    if (blockedLeaveDates.has(key)) return false;
+    return true;
+  };
+
+  const dayClassName = (date) => {
+    const key = toYmd(date);
+    if (generalHolidayDates.has(key)) return 'datepicker-day--holiday-general';
+    if (restrictedHolidayDates.has(key)) return 'datepicker-day--holiday-restricted';
+    if (blockedLeaveDates.has(key)) return 'datepicker-day--leave-blocked';
+    return undefined;
   };
   return (
     <div>
@@ -138,7 +193,8 @@ const ApplyLeave = () => {
                         onChange={(date) =>
                           setFormData({ ...formData, start_date: date })
                         }
-                        filterDate={isWeekday}
+                        filterDate={isSelectableDate}
+                        dayClassName={dayClassName}
                         dateFormat="dd-MM-yyyy"
                         className="form-control"
                         placeholderText="Select start date"
@@ -154,7 +210,8 @@ const ApplyLeave = () => {
                         onChange={(date) =>
                           setFormData({ ...formData, end_date: date })
                         }
-                        filterDate={isWeekday}
+                        filterDate={isSelectableDate}
+                        dayClassName={dayClassName}
                         minDate={formData.start_date}
                         dateFormat="dd-MM-yyyy"
                         className="form-control"

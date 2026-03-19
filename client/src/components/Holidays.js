@@ -8,6 +8,8 @@ import axios from 'axios';
 const Holidays = () => {
   const dispatch = useDispatch();
   const { holidays, loading } = useSelector((state) => state.holiday);
+  const { user } = useSelector((state) => state.auth);
+  const isAdmin = user?.role === 'admin';
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -290,6 +292,7 @@ const Holidays = () => {
     {
       name: 'Actions',
       width: '150px',
+      omit: !isAdmin,
       cell: (row) => (
         <ButtonGroup size="sm">
           <Button variant="outline-primary" onClick={() => handleEdit(row)}>
@@ -317,15 +320,19 @@ const Holidays = () => {
               <option key={year} value={year}>{year}</option>
             ))}
           </Form.Select>
-          <Button variant="primary" onClick={() => setShowAddModal(true)}>
-            + Add Holiday
-          </Button>
-          <Button variant="info" onClick={() => setShowUploadModal(true)}>
-            📤 Upload Excel
-          </Button>
-          <Button variant="danger" onClick={handleClearYear}>
-            🗑️ Clear Year
-          </Button>
+          {isAdmin && (
+            <>
+              <Button variant="primary" onClick={() => setShowAddModal(true)}>
+                + Add Holiday
+              </Button>
+              <Button variant="info" onClick={() => setShowUploadModal(true)}>
+                📤 Upload Excel
+              </Button>
+              <Button variant="danger" onClick={handleClearYear}>
+                🗑️ Clear Year
+              </Button>
+            </>
+          )}
           <Button variant="success" onClick={exportToExcel}>
             📊 Export Excel
           </Button>
