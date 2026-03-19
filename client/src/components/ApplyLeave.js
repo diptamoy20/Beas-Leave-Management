@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
+import { Card, Form, Button, Alert, Row, Col, ListGroup } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { applyLeave, fetchLeaves } from '../store/slices/leaveSlice';
 import { fetchEmployees } from '../store/slices/empSlice';
@@ -27,12 +27,43 @@ const ApplyLeave = () => {
   const [includeRestricted, setIncludeRestricted] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [approverQuery, setApproverQuery] = useState('');
+  const [showApproverResults, setShowApproverResults] = useState(false);
 
   useEffect(() => {
     dispatch(fetchEmployees());
     dispatch(fetchHolidays());
     dispatch(fetchLeaves());
   }, [dispatch]);
+
+  const approverOptions = useMemo(() => {
+    const list = Array.isArray(employees) ? employees : [];
+    return list.map((emp) => ({
+      id: emp.id,
+      value: String(emp.employee_id ?? ''),
+      label: String(emp.name ?? ''),
+    }));
+  }, [employees]);
+
+  const selectedApprover = useMemo(() => {
+    const v = String(formData.manager_id ?? '');
+    if (!v) return null;
+    return approverOptions.find((o) => o.value === v) || null;
+  }, [approverOptions, formData.manager_id]);
+
+  useEffect(() => {
+    if (selectedApprover && !approverQuery) {
+      setApproverQuery(selectedApprover.label);
+    }
+  }, [selectedApprover, approverQuery]);
+
+  const filteredApprovers = useMemo(() => {
+    const q = approverQuery.trim().toLowerCase();
+    if (!q) return approverOptions.slice(0, 30);
+    return approverOptions
+      .filter((o) => `${o.label} ${o.value}`.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [approverOptions, approverQuery]);
 
   const toYmd = (d) => {
     if (!d) return '';
@@ -133,6 +164,8 @@ const ApplyLeave = () => {
         reason: '',
         manager_id: '',
       });
+      setApproverQuery('');
+      setShowApproverResults(false);
       setIncludeRestricted(false);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -250,18 +283,65 @@ const ApplyLeave = () => {
 
                 <Form.Group className="mb-3">
                   <Form.Label>Leave Approver</Form.Label>
-                  <Form.Select
-                    value={formData.manager_id}
-                    onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                    required
-                  >
-                    <option value="">Select approver</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.employee_id}>
-                        {emp.name}
-                      </option>
-                    ))}
-                  </Form.Select>
+                  <div style={{ position: 'relative' }}>
+                    <Form.Control
+                      type="text"
+                      placeholder={employeesLoading ? 'Loading approvers...' : 'Search approver...'}
+                      value={approverQuery}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setApproverQuery(next);
+                        setShowApproverResults(true);
+                        setFormData((prev) => ({ ...prev, manager_id: '' }));
+                      }}
+                      onFocus={() => setShowApproverResults(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setShowApproverResults(false), 150);
+                      }}
+                      disabled={employeesLoading}
+                      autoComplete="off"
+                    />
+
+                    <Form.Control
+                      type="hidden"
+                      name="manager_id"
+                      value={formData.manager_id}
+                      required
+                      readOnly
+                    />
+
+                    {showApproverResults && !employeesLoading && filteredApprovers.length > 0 && (
+                      <ListGroup
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          zIndex: 20,
+                          maxHeight: 220,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {filteredApprovers.map((o) => (
+                          <ListGroup.Item
+                            key={o.id ?? o.value}
+                            action
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setFormData((prev) => ({ ...prev, manager_id: o.value }));
+                              setApproverQuery(o.label);
+                              setShowApproverResults(false);
+                            }}
+                          >
+                            <div className="d-flex justify-content-between">
+                              <span>{o.label}</span>
+                              <span className="text-muted">{o.value}</span>
+                            </div>
+                          </ListGroup.Item>
+                        ))}
+                      </ListGroup>
+                    )}
+                  </div>
                 </Form.Group>
 
 
