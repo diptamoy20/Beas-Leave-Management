@@ -1,13 +1,30 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
 const dbPath = path.join(__dirname, '../../database/leave_management.db');
+const sqlPath = path.join(__dirname, '../../database/sqlite_import.sql');
+
+const isNewDb = !fs.existsSync(dbPath);
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Failed to connect to SQLite database:', err.message);
   } else {
     console.log('Connected to SQLite database at', dbPath);
+    if (isNewDb) {
+      console.log('New database detected — running initial import...');
+      const sql = fs.readFileSync(sqlPath, 'utf8');
+      const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+      db.serialize(() => {
+        statements.forEach((stmt) => {
+          db.run(stmt, (runErr) => {
+            if (runErr) console.error('Import error:', runErr.message, '\n', stmt.substring(0, 80));
+          });
+        });
+      });
+      console.log('Initial import complete.');
+    }
   }
 });
 
@@ -30,6 +47,10 @@ const run = (sql, params = []) =>
   });
 
 module.exports = { query, run, db };
+
+
+
+
 
 
 // const mysql = require('mysql2/promise');

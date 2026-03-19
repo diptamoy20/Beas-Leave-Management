@@ -20,7 +20,7 @@ const Sidebar = () => {
     { path: '/my-leaves', icon: <FiCalendar />, label: 'My Leaves' },
     { path: '/attendance', icon: <FiClock />, label: 'Attendance' },
     { path: '/holidays', icon: <FiCalendar />, label: 'Holidays' },
-    { path: '/leave-balance', icon: <FiCheckSquare />, label: 'Leave Balance' },
+    // { path: '/leave-balance', icon: <FiCheckSquare />, label: 'Leave Balance' },
   ];
 
   if (user?.role === 'manager') {
