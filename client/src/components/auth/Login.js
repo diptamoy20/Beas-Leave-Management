@@ -15,16 +15,6 @@ const Login = () => {
     identifier: '',
     password: '',
   });
-
-  const [showResetModal, setShowResetModal] = useState(false);
-  const [resetData, setResetData] = useState({
-    identifier: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -37,41 +27,6 @@ const Login = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     dispatch(login(formData));
-  };
-
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
-    setResetError('');
-    setResetSuccess('');
-
-    if (resetData.newPassword !== resetData.confirmPassword) {
-      setResetError('Passwords do not match');
-      return;
-    }
-
-    if (resetData.newPassword.length < 6) {
-      setResetError('Password must be at least 6 characters');
-      return;
-    }
-
-    setResetLoading(true);
-    try {
-      const response = await axios.post('/api/auth/forgot-password', {
-        identifier: resetData.identifier,
-        newPassword: resetData.newPassword
-      });
-
-      setResetSuccess(response.data.message);
-      setTimeout(() => {
-        setShowResetModal(false);
-        setResetData({ identifier: '', newPassword: '', confirmPassword: '' });
-        setResetSuccess('');
-      }, 2000);
-    } catch (err) {
-      setResetError(err.response?.data?.message || 'Failed to reset password');
-    } finally {
-      setResetLoading(false);
-    }
   };
  
 
@@ -130,17 +85,6 @@ const Login = () => {
             </div>
           </Form.Group>
 
-          <div className="text-end mb-3">
-            <Button
-              variant="link"
-              className="p-0"
-              onClick={() => setShowResetModal(true)}
-              style={{ textDecoration: 'none', color: '#405189' }}
-            >
-              Forgot Password?
-            </Button>
-          </div>
-
           <Button
             variant="primary"
             type="submit"
@@ -154,7 +98,7 @@ const Login = () => {
       </div>
 
       {/* Reset Password Modal */}
-      <Modal show={showResetModal} onHide={() => setShowResetModal(false)} centered>
+      {/* <Modal show={showResetModal} onHide={() => setShowResetModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>Reset Password</Modal.Title>
         </Modal.Header>
@@ -207,7 +151,7 @@ const Login = () => {
             </Button>
           </Form>
         </Modal.Body>
-      </Modal>
+      </Modal> */}
     </div>
   );
 };
