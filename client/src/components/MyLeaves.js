@@ -30,13 +30,13 @@ const MyLeaves = () => {
     },
     {
       name: 'Start Date',
-      selector: (row) => new Date(row.start_date).toLocaleDateString(),
+      selector: (row) => new Date(row.start_date).toLocaleDateString('en-GB').replace(/\//g, '-'),
       sortable: true,
       width: '130px',
     },
     {
       name: 'End Date',
-      selector: (row) => new Date(row.end_date).toLocaleDateString(),
+      selector: (row) => new Date(row.end_date).toLocaleDateString('en-GB').replace(/\//g, '-'),
       sortable: true,
       width: '130px',
     },
@@ -55,7 +55,7 @@ const MyLeaves = () => {
     },
     {
       name: 'Applied On',
-      selector: (row) => new Date(row.created_at).toLocaleDateString(),
+      selector: (row) => new Date(row.created_at).toLocaleDateString('en-GB').replace(/\//g, '-'),
       sortable: true,
       width: '130px',
     },

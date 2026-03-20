@@ -67,10 +67,21 @@ async function initializeDatabase() {
         date DATE NOT NULL,
         clock_in DATETIME,
         clock_out DATETIME,
+        total_time INT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure total_time column exists for existing installs
+    // (create table won't add new columns once the table already exists)
+    const [attendanceColumns] = await connection.query(
+      "SHOW COLUMNS FROM attendance LIKE 'total_time'"
+    );
+    if (!attendanceColumns || attendanceColumns.length === 0) {
+      await connection.query('ALTER TABLE attendance ADD COLUMN total_time INT DEFAULT NULL');
+      console.log('✅ Added attendance.total_time column');
+    }
 
     // Create holidays table
     await connection.query(`

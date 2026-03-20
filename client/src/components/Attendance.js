@@ -10,6 +10,13 @@ const Attendance = () => {
 
   useEffect(() => {
     fetchAttendance();
+
+    // Poll so biometric device sync updates reflect automatically.
+    const intervalId = setInterval(() => {
+      fetchAttendance();
+    }, 30000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const fetchAttendance = async () => {
@@ -19,10 +26,9 @@ const Attendance = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAttendance(response.data);
-      
-      const today = response.data.find(
-        (a) => new Date(a.date).toDateString() === new Date().toDateString()
-      );
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const today = response.data.find((a) => String(a.date) === todayStr);
       setClockedIn(today && today.clock_in && !today.clock_out);
     } catch (error) {
       console.error('Error fetching attendance:', error);
@@ -58,7 +64,7 @@ const Attendance = () => {
   const columns = [
     {
       name: 'Date',
-      selector: (row) => new Date(row.date).toLocaleDateString(),
+      selector: (row) => new Date(row.date).toLocaleDateString('en-GB').replace(/\//g, '-'),
       sortable: true,
       width: '150px',
     },
@@ -73,15 +79,13 @@ const Attendance = () => {
       sortable: true,
     },
     {
-      name: 'Duration',
+      name: 'Total Time',
       selector: (row) => {
-        if (row.clock_in && row.clock_out) {
-          const diff = new Date(row.clock_out) - new Date(row.clock_in);
-          const hours = Math.floor(diff / 3600000);
-          const minutes = Math.floor((diff % 3600000) / 60000);
-          return `${hours}h ${minutes}m`;
-        }
-        return '-';
+        const minutes = row.total_time;
+        if (minutes == null) return '-';
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return `${h}h ${m}m`;
       },
     },
   ];
@@ -89,33 +93,6 @@ const Attendance = () => {
   return (
     <div>
       <h4 className="mb-4 dashboard-toggle">Attendance</h4>
-      
-      <Row className="mb-4">
-        <Col lg={4}>
-          <Card className="dashboard-card text-center">
-            <Card.Body>
-              <h5 className="mb-3">Today's Attendance</h5>
-              <div className="d-flex gap-2 justify-content-center">
-                <Button
-                  variant="success"
-                  onClick={handleClockIn}
-                  disabled={clockedIn}
-                >
-                  Clock In
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleClockOut}
-                  disabled={!clockedIn}
-                >
-                  Clock Out
-                </Button>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
       <Card className="dashboard-card">
         <Card.Body>
           <h5 className="mb-3">Attendance History</h5>

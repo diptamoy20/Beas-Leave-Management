@@ -255,7 +255,7 @@ const Holidays = () => {
   const columns = [
     {
       name: 'Date',
-      selector: (row) => new Date(row.date).toLocaleDateString(),
+      selector: (row) => new Date(row.date).toLocaleDateString('en-GB').replace(/\//g, '-'),
       sortable: true,
       width: '150px',
     },
