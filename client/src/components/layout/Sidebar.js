@@ -39,7 +39,7 @@ const Sidebar = () => {
       { path: '/leave-records', icon: <FiCheckSquare />, label: 'Leave Records' }
     );
       menuItems.push(
-      { path: '/attendance', icon: <FiClock />, label: 'Attendance' }
+      { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance' }
     );
   }
 
