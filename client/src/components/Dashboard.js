@@ -311,7 +311,8 @@ const Dashboard = () => {
                           </small>
                         </div>
                         <div>
-                          <div className="fw-semibold">{holiday.name}</div>
+                          <div className="fw-semibold">{holiday.purpose}</div>
+                          {/* <strong className="fw-semibold">{holiday.day}</strong> */}
                           <small className="text-muted">{holiday.type}</small>
                         </div>
                       </div>

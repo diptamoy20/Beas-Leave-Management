@@ -18,23 +18,28 @@ const Sidebar = () => {
     { path: '/dashboard', icon: <FiHome />, label: 'Dashboard' },
     { path: '/apply-leave', icon: <FiFileText />, label: 'Apply Leave' },
     { path: '/my-leaves', icon: <FiCalendar />, label: 'My Leaves' },
-    { path: '/attendance', icon: <FiClock />, label: 'Attendance' },
+    { path: '/attendance', icon: <FiClock />, label: 'My Attendance' },
     { path: '/holidays', icon: <FiCalendar />, label: 'Holidays' },
     // { path: '/leave-balance', icon: <FiCheckSquare />, label: 'Leave Balance' },
   ];
 
-  if (user?.role === 'manager' || user?.role === 'admin') {
+  if (user?.role === 'manager' 
+    // || user?.role === 'admin'
+  ) {
     menuItems.push(
       { path: '/manage-leaves', icon: <FiUsers />, label: 'Manage Leaves' }
     );
     menuItems.push(
-      { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance Summary' }
+      { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance' }
     );
   }
 
   if (user?.role === 'admin') {
     menuItems.push(
       { path: '/leave-records', icon: <FiCheckSquare />, label: 'Leave Records' }
+    );
+      menuItems.push(
+      { path: '/attendance', icon: <FiClock />, label: 'Attendance' }
     );
   }
 

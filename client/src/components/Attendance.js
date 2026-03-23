@@ -64,18 +64,6 @@ const Attendance = () => {
     }
   };
 
-  const handleClockOut = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/attendance/clock-out', {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchAttendance();
-    } catch (error) {
-      console.error('Error clocking out:', error);
-    }
-  };
-
   const columns = [
     {
       name: 'Date',
@@ -158,7 +146,7 @@ const Attendance = () => {
               columns={columns}
               data={attendance}
               pagination
-              paginationPerPage={10}
+              paginationPerPage={20}
               conditionalRowStyles={conditionalRowStyles}
             />
           )}
