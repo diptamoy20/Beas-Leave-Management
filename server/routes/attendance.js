@@ -5,6 +5,16 @@ const startAttendanceDeviceSync = require('../services/attendanceDeviceSync');
 
 const router = express.Router();
 
+function formatDateLocal(d) {
+  if (!d) return null;
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function pad2(value) {
   return String(value).padStart(2, '0');
 }
@@ -25,20 +35,16 @@ function toDateOnlyString(value) {
   return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
 }
 
-function toUtcDateOnlyString(value) {
-  if (!value) return null;
+function toLocalDateString(date) {
+  if (!date) return null;
 
-  if (typeof value === 'string') {
-    return value.slice(0, 10);
-  }
+  const d = new Date(date);
 
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString().slice(0, 10);
-  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
-  return parsed.toISOString().slice(0, 10);
+  return `${year}-${month}-${day}`;
 }
 
 function parseDateOnly(value) {
@@ -50,9 +56,9 @@ function parseDateOnly(value) {
 }
 
 function getAttendanceDateKey(attendanceRow) {
-  if (attendanceRow?.clock_in) return toUtcDateOnlyString(attendanceRow.clock_in);
-  if (attendanceRow?.clock_out) return toUtcDateOnlyString(attendanceRow.clock_out);
-  return toDateOnlyString(attendanceRow?.derived_date || attendanceRow?.date);
+  if (attendanceRow?.clock_in) return formatDateLocal(attendanceRow.clock_in);
+  if (attendanceRow?.clock_out) return formatDateLocal(attendanceRow.clock_out);
+  return formatDateLocal(attendanceRow?.derived_date || attendanceRow?.date);
 }
 
 // Start device -> DB sync once (cron/interval).
@@ -65,12 +71,12 @@ if (!global.__attendanceDeviceSyncStarted) {
 router.post('/clock-in', auth, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Get employee_id from employees table
     const [empData] = await db.query('SELECT employee_id FROM employees WHERE id = ?', [req.user.id]);
     if (!empData.length) return res.status(404).json({ message: 'Employee not found' });
     const employeeId = empData[0].employee_id;
-    
+
     const [existing] = await db.query(
       'SELECT * FROM attendance WHERE employee_id = ? AND date = ?',
       [employeeId, today]
@@ -95,12 +101,12 @@ router.post('/clock-in', auth, async (req, res) => {
 router.post('/clock-out', auth, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Get employee_id from employees table
     const [empData] = await db.query('SELECT employee_id FROM employees WHERE id = ?', [req.user.id]);
     if (!empData.length) return res.status(404).json({ message: 'Employee not found' });
     const employeeId = empData[0].employee_id;
-    
+
     const [existing] = await db.query(
       'SELECT * FROM attendance WHERE employee_id = ? AND date = ?',
       [employeeId, today]
@@ -202,7 +208,7 @@ router.get('/my-attendance', auth, async (req, res) => {
         const hl = holidayMap.get(key) || null;
 
         const row = {
-          date: key,
+          date: att ? att.date : key,
           employee_id: employeeId,
           employee_name: empRows.length ? empRows[0].name : '',
           clock_in: att ? att.clock_in : null,
@@ -274,62 +280,122 @@ router.get('/all', auth, isManager, async (req, res) => {
 });
 
 // Attendance summary for a given employee and date range
+// ✅ Helper: format date in LOCAL (IST)
+function formatDateLocal(d) {
+  if (!d) return null;
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// ✅ Route
 router.get('/summary', auth, isManager, async (req, res) => {
   try {
     const { employeeId, from, to } = req.query;
-    // If employeeId provided and range supplied, return server-side flattened day-wise rows for that employee
+
     if (employeeId && (from || to)) {
-      const start = from ? parseDateOnly(from) : null;
-      const end = to ? parseDateOnly(to) : null;
-      const endDate = end || new Date();
-      const startDate = start || new Date(new Date().setDate(endDate.getDate() - 29));
+      const startDate = from ? new Date(from) : null;
+      const endDate = to ? new Date(to) : new Date();
 
-      // employee DB id (for leave queries)
-      const [empRows] = await db.query('SELECT id, name FROM employees WHERE employee_id = ?', [employeeId]);
-      if (!empRows.length) return res.status(404).json({ message: 'Employee not found' });
+      const finalStart =
+        startDate ||
+        new Date(new Date(endDate).setDate(endDate.getDate() - 29));
 
-      // attendance rows in range for this employee
+      // ✅ Get employee
+      const [empRows] = await db.query(
+        'SELECT id, name FROM employees WHERE employee_id = ?',
+        [employeeId]
+      );
+
+      if (!empRows.length) {
+        return res.status(404).json({ message: 'Employee not found' });
+      }
+
+      const empDbId = empRows[0].id;
+
+      // ✅ Attendance (FIXED TIMEZONE ISSUE)
       const [attRows] = await db.query(
         `SELECT a.*, e.name as employee_name,
-                COALESCE(DATE(a.clock_in), DATE(a.clock_out), a.date) AS derived_date
+          COALESCE(
+            DATE(CONVERT_TZ(a.clock_in, '+00:00', '+05:30')),
+            DATE(CONVERT_TZ(a.clock_out, '+00:00', '+05:30')),
+            a.date
+          ) AS derived_date
          FROM attendance a
          JOIN employees e ON a.employee_id = e.employee_id
-         WHERE a.employee_id = ? AND COALESCE(DATE(a.clock_in), DATE(a.clock_out), a.date) BETWEEN ? AND ?`,
-        [employeeId, toDateOnlyString(startDate), toDateOnlyString(endDate)]
+         WHERE a.employee_id = ?
+         AND COALESCE(
+              DATE(CONVERT_TZ(a.clock_in, '+00:00', '+05:30')),
+              DATE(CONVERT_TZ(a.clock_out, '+00:00', '+05:30')),
+              a.date
+            ) BETWEEN ? AND ?`,
+        [
+          employeeId,
+          formatDateLocal(finalStart),
+          formatDateLocal(endDate),
+        ]
       );
 
-      // approved leaves for this employee overlapping range
-      const empDbId = empRows[0].id;
+      // ✅ Leaves
       const [leaveRows] = await db.query(
-        `SELECT lr.* FROM leave_requests lr WHERE lr.employee_id = ? AND lr.status = 'Approved' AND NOT (lr.end_date < ? OR lr.start_date > ?) ORDER BY lr.start_date ASC`,
-        [empDbId, toDateOnlyString(startDate), toDateOnlyString(endDate)]
+        `SELECT * FROM leave_requests
+         WHERE employee_id = ?
+         AND status = 'Approved'
+         AND NOT (end_date < ? OR start_date > ?)`,
+        [
+          empDbId,
+          formatDateLocal(finalStart),
+          formatDateLocal(endDate),
+        ]
       );
 
-      // holidays in range
-      const [holidayRows] = await db.query('SELECT * FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date ASC', [toDateOnlyString(startDate), toDateOnlyString(endDate)]);
+      // ✅ Holidays
+      const [holidayRows] = await db.query(
+        `SELECT * FROM holidays
+         WHERE date BETWEEN ? AND ?`,
+        [
+          formatDateLocal(finalStart),
+          formatDateLocal(endDate),
+        ]
+      );
 
+      // ✅ Attendance Map (KEY FIX HERE)
       const attMap = new Map();
-      (attRows || []).forEach((a) => {
-        attMap.set(getAttendanceDateKey(a), a);
+      attRows.forEach((a) => {
+        const key = formatDateLocal(a.derived_date); // 🔥 IMPORTANT
+        attMap.set(key, a);
       });
 
-      const leaveDays = [];
-      (leaveRows || []).forEach((l) => {
-        const s = parseDateOnly(l.start_date);
-        const e = parseDateOnly(l.end_date);
-        for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
-          leaveDays.push({ date: toDateOnlyString(d), ...l });
+      // ✅ Leave Map (expand days)
+      const leaveMap = new Map();
+      leaveRows.forEach((l) => {
+        let d = new Date(l.start_date);
+        const end = new Date(l.end_date);
+
+        while (d <= end) {
+          leaveMap.set(formatDateLocal(d), l);
+          d.setDate(d.getDate() + 1);
         }
       });
-      const leaveMap = new Map();
-      leaveDays.forEach((d) => leaveMap.set(String(d.date), d));
 
+      // ✅ Holiday Map
       const holidayMap = new Map();
-      (holidayRows || []).forEach((h) => holidayMap.set(toDateOnlyString(h.date), h));
+      holidayRows.forEach((h) => {
+        holidayMap.set(formatDateLocal(h.date), h);
+      });
 
+      // ✅ FINAL ROWS (NO DUPLICATES)
       const rows = [];
-      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const key = toDateOnlyString(d);
+      let d = new Date(finalStart);
+
+      while (d <= endDate) {
+        const key = formatDateLocal(d);
+
         const att = attMap.get(key) || null;
         const lv = leaveMap.get(key) || null;
         const hl = holidayMap.get(key) || null;
@@ -347,11 +413,13 @@ router.get('/summary', auth, isManager, async (req, res) => {
           holiday_purpose: hl ? hl.purpose : null,
         };
 
+        // ✅ Status logic
         if (hl && String(hl.type).toLowerCase() === 'general') {
           row.status = 'holiday';
           row.statusText = 'General Holiday';
         } else if (lv) {
           const lt = String(lv.leave_type || '').toLowerCase();
+
           if (lt.includes('restricted')) {
             row.status = 'restricted_leave';
             row.statusText = 'Taken Restricted Leave';
@@ -368,29 +436,43 @@ router.get('/summary', auth, isManager, async (req, res) => {
         }
 
         rows.push(row);
+        d.setDate(d.getDate() + 1);
       }
 
       return res.json({ rows });
     }
 
-    // fallback: build query and return raw attendance rows with joins
-    let query = `SELECT a.*, e.name as employee_name, e.designation, lr.leave_type AS leave_type, h.type AS holiday_type, h.purpose AS holiday_purpose
-                 FROM attendance a
-                 JOIN employees e ON a.employee_id = e.employee_id
-                 LEFT JOIN leave_requests lr ON lr.employee_id = e.id AND lr.status = 'Approved' AND a.date BETWEEN lr.start_date AND lr.end_date
-                 LEFT JOIN holidays h ON a.date = h.date
-                 WHERE 1=1`;
+    // ✅ FALLBACK (simple query)
+    let query = `
+      SELECT a.*, e.name as employee_name
+      FROM attendance a
+      JOIN employees e ON a.employee_id = e.employee_id
+      WHERE 1=1
+    `;
+
     const params = [];
+
     if (employeeId) {
       query += ' AND a.employee_id = ?';
       params.push(employeeId);
     }
+
     query += ' ORDER BY a.date DESC';
 
     const [attendance] = await db.query(query, params);
-    res.json(attendance);
+
+    const normalized = attendance.map((a) => ({
+      ...a,
+      date: formatDateLocal(a.date),
+    }));
+
+    res.json(normalized);
+
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({
+      message: 'Server error',
+      error: error.message,
+    });
   }
 });
 
