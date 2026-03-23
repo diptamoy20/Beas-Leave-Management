@@ -9,8 +9,9 @@ const DEVICE_IP_IN = process.env.ATTENDANCE_DEVICE_IN_IP || '192.168.1.91';
 const DEVICE_IP_OUT = process.env.ATTENDANCE_DEVICE_OUT_IP || '192.168.1.92';
 
 // Keep it fairly small to reduce device load, but large enough to cover downtime.
-const SYNC_INTERVAL_MS = Number(process.env.ATTENDANCE_SYNC_INTERVAL_MS || 5 * 60 * 10000);
-const LOOKBACK_DAYS = Number(process.env.ATTENDANCE_LOOKBACK_DAYS || 10);
+// Default to 5 minutes (5 * 60 * 1000 ms). Previous value was accidentally much larger.
+const SYNC_INTERVAL_MS = Number(process.env.ATTENDANCE_SYNC_INTERVAL_MS || 5 * 60 * 1000);
+const LOOKBACK_DAYS = Number(process.env.ATTENDANCE_LOOKBACK_DAYS || 30);
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -185,9 +186,6 @@ async function syncFromDevices() {
       const deviceEmployeeId = extractEmployeeDeviceId(record);
       const ts = extractTimestamp(record);
 
-      console.log(`[DEVICE RECORD] Raw:`, JSON.stringify(record));
-      console.log(`[DEVICE RECORD] Extracted ID: ${deviceEmployeeId}, Timestamp: ${ts ? ts.toISOString() : 'null'}`);
-
       if (deviceEmployeeId == null || !ts) {
         console.log(`[DEVICE RECORD] ❌ SKIPPED: Missing ID or timestamp`);
         continue;
@@ -202,7 +200,6 @@ async function syncFromDevices() {
         console.log(`[DEVICE RECORD] ❌ SKIPPED: Device ID ${deviceEmployeeId} not found in employees table. Available IDs:`, Array.from(employeeIdToDeviceId.keys()));
         continue;
       }
-      console.log(`[DEVICE RECORD] ✅ MAPPED: Device ID ${deviceEmployeeId} -> Employee ID ${employeeId}`);
 
       const dateStr = toMySqlDate(ts);
       const key = `${employeeId}|${dateStr}`;

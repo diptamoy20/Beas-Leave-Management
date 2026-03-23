@@ -50,7 +50,7 @@ router.post('/login', async (req, res) => {
         employee_id: user.employee_id,
         name: user.name,
         email: user.email,
-        department: user.department,
+        designation: user.designation,
         role: user.role
       }
     });
@@ -149,7 +149,7 @@ router.post('/forgot-password', async (req, res) => {
 
 router.get('/me', auth, async (req, res) => {
   try {
-    const [users] = await db.query('SELECT id, employee_id, name, email, department, role FROM employees WHERE id = ?', [req.user.id]);
+    const [users] = await db.query('SELECT id, employee_id, name, email, designation, role FROM employees WHERE id = ?', [req.user.id]);
     res.json(users[0]);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });

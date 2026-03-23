@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard';
 import ApplyLeave from './components/ApplyLeave';
 import MyLeaves from './components/MyLeaves';
 import Attendance from './components/Attendance';
+import AttendanceSummary from './components/AttendanceSummary';
 import Holidays from './components/Holidays';
 import LeaveBalance from './components/LeaveBalance';
 import ManageLeaves from './components/ManageLeaves';
@@ -46,6 +47,7 @@ function App() {
                       <Route path="/apply-leave" element={<ApplyLeave />} />
                       <Route path="/my-leaves" element={<MyLeaves />} />
                       <Route path="/attendance" element={<Attendance />} />
+                      <Route path="/attendance-summary" element={<AttendanceSummary />} />
                       <Route path="/holidays" element={<Holidays />} />
                       <Route path="/leave-balance" element={<LeaveBalance />} />
                       <Route path="/manage-leaves" element={<ManageLeaves />} />

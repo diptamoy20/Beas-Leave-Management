@@ -14,7 +14,7 @@ const Register = () => {
     name: '',
     email: '',
     password: '',
-    department: '',
+    designation: '',
     role: 'employee',
   });
   const [success, setSuccess] = useState(false);
@@ -95,12 +95,12 @@ const Register = () => {
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Department</Form.Label>
+                <Form.Label>Designation</Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="Enter department"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  placeholder="Enter designation"
+                  value={formData.designation}
+                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                   required
                 />
               </Form.Group>

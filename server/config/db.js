@@ -18,7 +18,7 @@ async function initializeDatabase() {
     const connection = await pool.getConnection();
     console.log('Connected to MySQL database');
 
-    // Create employees table
+    // Create employees table (include both department and designation for compatibility)
     await connection.query(`
       CREATE TABLE IF NOT EXISTS employees (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -27,6 +27,7 @@ async function initializeDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         department VARCHAR(255),
+        designation VARCHAR(255),
         role VARCHAR(50) DEFAULT 'employee',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -81,6 +82,24 @@ async function initializeDatabase() {
     if (!attendanceColumns || attendanceColumns.length === 0) {
       await connection.query('ALTER TABLE attendance ADD COLUMN total_time INT DEFAULT NULL');
       console.log('✅ Added attendance.total_time column');
+    }
+
+    // Ensure designation column exists for existing installs and migrate data
+    const [designationColumns] = await connection.query("SHOW COLUMNS FROM employees LIKE 'designation'");
+    if (!designationColumns || designationColumns.length === 0) {
+      await connection.query('ALTER TABLE employees ADD COLUMN designation VARCHAR(255)');
+      console.log('✅ Added employees.designation column');
+    }
+
+    // If department values exist and designation is empty, copy department -> designation
+    try {
+      await connection.query(
+        "UPDATE employees SET designation = department WHERE (designation IS NULL OR designation = '') AND (department IS NOT NULL AND department <> '')"
+      );
+      console.log('✅ Migrated department -> designation for existing employees where applicable');
+    } catch (e) {
+      // Non-fatal; log and continue
+      console.warn('Could not migrate department -> designation automatically:', e.message || e);
     }
 
     // Create holidays table

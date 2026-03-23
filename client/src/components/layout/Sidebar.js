@@ -27,6 +27,9 @@ const Sidebar = () => {
     menuItems.push(
       { path: '/manage-leaves', icon: <FiUsers />, label: 'Manage Leaves' }
     );
+    menuItems.push(
+      { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance Summary' }
+    );
   }
 
   if (user?.role === 'admin') {

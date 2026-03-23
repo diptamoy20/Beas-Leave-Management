@@ -72,7 +72,7 @@ function Sidebar({ user, onLogout }) {
         <div style={{padding: '16px', background: '#f9fafb', borderRadius: '8px', marginBottom: '12px', border: '1px solid #e5e7eb'}}>
           <div style={{fontSize: '12px', color: '#9ca3af', marginBottom: '4px'}}>Logged in as</div>
           <div style={{fontSize: '14px', fontWeight: '600', color: '#1a1a1a'}}>{user.name} ({user.employee_id})</div>
-          <div style={{fontSize: '12px', color: '#9ca3af'}}>{user.department}</div>
+          <div style={{fontSize: '12px', color: '#9ca3af'}}>{user.designation}</div>
         </div>
         <button onClick={handleLogout} className="btn btn-logout" style={{width: '100%'}}>
           🚪 Logout
