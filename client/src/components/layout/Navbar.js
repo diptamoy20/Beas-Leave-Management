@@ -67,10 +67,21 @@ const Navbar = () => {
   return (
     <nav className={`navbar-custom ${!sidebarExpanded ? 'sidebar-collapsed' : ''}`}>
       <div className="navbar-left">
-        <button className="navbar-toggle" onClick={() => dispatch(toggleSidebar())}>
-          <FiMenu />
+        <button
+          className={`navbar-toggle ${sidebarExpanded ? 'is-open' : 'is-collapsed'}`}
+          onClick={() => dispatch(toggleSidebar())}
+          aria-label="Toggle sidebar"
+        >
+          <span className="navbar-toggle-lines" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
         </button>
-        <h5 className="mb-0">Good Morning, {user?.name?.split(' ')[0]}!</h5>
+        <div className="navbar-greeting">
+          <span className="navbar-kicker">Workspace</span>
+          <h5 className="mb-0">Good Morning, {user?.name?.split(' ')[0]}!</h5>
+        </div>
       </div>
 
       <div className="navbar-right">
@@ -159,7 +170,6 @@ const Navbar = () => {
               type="submit"
               className="w-100"
               disabled={resetLoading}
-              style={{ background: '#405189', border: 'none' }}
             >
               {resetLoading ? 'Resetting...' : 'Reset Password'}
             </Button>

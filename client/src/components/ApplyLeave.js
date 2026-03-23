@@ -197,15 +197,20 @@ const ApplyLeave = () => {
     return undefined;
   };
   return (
-    <div>
+    <div className="apply-leave-page">
       <h4 className="mb-4 dashboard-toggle">Apply for Leave</h4>
-      <Row>
+      <Row className="g-4">
         <Col lg={8}>
-          <Card className="dashboard-card">
+          <Card className="dashboard-card apply-leave-card">
             <Card.Body>
               {success && <Alert variant="success">Leave application submitted successfully!</Alert>}
               {error && <Alert variant="danger">{error}</Alert>}
-              <Form onSubmit={handleSubmit}>
+              <Form onSubmit={handleSubmit} className="apply-leave-form">
+                <div className="form-section">
+                  <div className="form-section-header">
+                    <span className="form-section-kicker">Request Details</span>
+                    <h5 className="form-section-title mb-0">Leave configuration</h5>
+                  </div>
                 <Form.Group className="mb-3">
                   <Form.Label>Leave Type</Form.Label>
                   <Form.Control
@@ -217,7 +222,7 @@ const ApplyLeave = () => {
                   />
                 </Form.Group>
 
-                <Row>
+                <Row className="g-3">
                   <Col>
                     <Form.Group className="mb-3">
                       <Form.Label>Start Date</Form.Label>
@@ -253,8 +258,15 @@ const ApplyLeave = () => {
                     </Form.Group>
                   </Col>
                 </Row>
+                </div>
 
-                <Row>
+                <div className="form-section">
+                  <div className="form-section-header">
+                    <span className="form-section-kicker">Approval Flow</span>
+                    <h5 className="form-section-title mb-0">Approver and notes</h5>
+                  </div>
+
+                <Row className="g-3">
                   <Col>
                     <Form.Group className="mb-3">
                       <Form.Label>No of Days</Form.Label>
@@ -321,6 +333,7 @@ const ApplyLeave = () => {
                           maxHeight: 220,
                           overflowY: 'auto',
                         }}
+                        className="approver-results-list"
                       >
                         {filteredApprovers.map((o) => (
                           <ListGroup.Item
@@ -356,11 +369,12 @@ const ApplyLeave = () => {
                     required
                   />
                 </Form.Group>
+                </div>
 
                 <Button
                   type="submit"
                   disabled={loading}
-                  style={{ background: '#405189', border: 'none' }}
+                  className="btn-brand-primary"
                 >
                   {loading ? 'Submitting...' : 'Submit Leave Request'}
                 </Button>

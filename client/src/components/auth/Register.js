@@ -124,7 +124,6 @@ const Register = () => {
             type="submit"
             className="w-100 mb-3"
             disabled={loading}
-            style={{ background: '#405189', border: 'none' }}
           >
             {loading ? 'Creating Account...' : 'Sign Up'}
           </Button>
