@@ -325,15 +325,15 @@ const Holidays = () => {
               <Button variant="primary" onClick={() => setShowAddModal(true)}>
                 + Add Holiday
               </Button>
-              <Button variant="info" onClick={() => setShowUploadModal(true)}>
+              <Button variant="primary" onClick={() => setShowUploadModal(true)}>
                 📤 Upload Excel
               </Button>
-              <Button variant="danger" onClick={handleClearYear}>
+              <Button variant="primary" onClick={handleClearYear}>
                 🗑️ Clear Year
               </Button>
             </>
           )}
-          <Button variant="success" onClick={exportToExcel}>
+          <Button variant="primary" onClick={exportToExcel}>
             📊 Export Excel
           </Button>
           <Button variant="primary" onClick={exportToPDF}>
