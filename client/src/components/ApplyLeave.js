@@ -242,26 +242,26 @@ const ApplyLeave = () => {
       {/* Leave Balance Section */}
       <Row className="mb-4">
         <Col md={3}>
-          <Card className="stat-card blue text-center py-3">
-            <div className="stat-label">Total Leave</div>
+          <Card className="stat-card text-center py-3">
+            <div className="stat-label text-gray-200">Total Leave</div>
             <div className="stat-value text-primary">{totalLeave}</div>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="stat-card green text-center py-3">
-            <div className="stat-label">Balance Leave</div>
+          <Card className="stat-card text-center py-3">
+            <div className="stat-label text-gray-200">Balance Leave</div>
             <div className="stat-value text-success">{balanceLeaveCount}</div>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="stat-card orange text-center py-3">
-            <div className="stat-label">Restricted</div>
+          <Card className="stat-card text-center py-3">
+            <div className="stat-label text-gray-200">Restricted</div>
             <div className="stat-value text-warning">{restrictedLeaveCount}</div>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="stat-card orange text-center py-3">
-            <div className="stat-label">Quarterly</div>
+          <Card className="stat-card text-center py-3">
+            <div className="stat-label text-gray-200">Quarterly</div>
             <div className="stat-value text-warning">{quarterlyLeaveCount}</div>
           </Card>
         </Col>

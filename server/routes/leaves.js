@@ -18,8 +18,7 @@ router.post('/apply', auth, async (req, res) => {
     // Send email notification to managers if manager_id is present
     if (manager_id) {
       try {
-        const managerIds = manager_id.split(',');
-        const [managerRows] = await db.query('SELECT name, email FROM employees WHERE employee_id IN (?)', [managerIds]);
+        const [managerRows] = await db.query('SELECT name, email FROM employees WHERE FIND_IN_SET(employee_id, ?) > 0', [manager_id]);
         const [employeeRows] = await db.query('SELECT name, email FROM employees WHERE employee_id = ?', [employee_id]);
         
         if (managerRows.length > 0 && employeeRows.length > 0) {

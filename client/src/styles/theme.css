@@ -598,7 +598,7 @@ body.dark-mode {
 }
 
 .dashboard-card {
-  padding: 24px;
+  /* padding: 24px; */
   transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
 }
 
