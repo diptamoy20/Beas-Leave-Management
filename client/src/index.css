@@ -542,3 +542,184 @@ body {
     display: none;
   }
 }
+
+/* Apply Leave Mobile Styling */
+.apply-leave-container {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #f8f9fc;
+  padding: 16px;
+  min-height: 100vh;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.balance-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px 8px;
+  border: 1px solid #eaeaea;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.balance-label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.balance-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.custom-datepicker-container {
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  padding: 12px 16px;
+  position: relative;
+}
+
+.datepicker-icon {
+  margin-right: 12px;
+  font-size: 18px;
+}
+
+.custom-datepicker-input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  font-size: 14px;
+  outline: none;
+  color: #333;
+}
+
+.datepicker-arrow {
+  position: absolute;
+  right: 16px;
+  color: #999;
+}
+
+.duration-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.duration-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: white;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.duration-chip.active {
+  border-color: #1a56db;
+  background-color: #f0f4ff;
+}
+
+.net-days-card {
+  background: #f0f4ff;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.net-days-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a56db;
+}
+
+.net-days-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.approver-list {
+  background: white;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.approver-card {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #eaeaea;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.approver-card:last-child {
+  border-bottom: none;
+}
+.approver-card:hover {
+  background: #fafafa;
+}
+
+.approver-checkbox {
+  margin-right: 16px;
+  font-size: 20px;
+}
+
+.approver-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+}
+
+.approver-role {
+  font-size: 12px;
+  color: #888;
+}
+
+.restricted-card {
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.restricted-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.custom-textarea {
+  border: 1px solid #eaeaea !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  font-size: 14px !important;
+  resize: none;
+}
+
+.submit-leave-btn {
+  background-color: #1a56db !important;
+  border: none !important;
+  border-radius: 24px !important;
+  padding: 14px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  margin-top: 24px;
+  margin-bottom: 40px;
+}

@@ -17,7 +17,7 @@ const LeaveBalance = () => {
       const response = await axios.get('/api/leaves/balance', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setBalance(response.data);
+      setBalance(response.data.data);
     } catch (error) {
       console.error('Error fetching balance:', error);
     } finally {

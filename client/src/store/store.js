@@ -4,6 +4,7 @@ import themeReducer from './slices/themeSlice';
 import leaveReducer from './slices/leaveSlice';
 import holidayReducer from './slices/holidaySlice';
 import empReducer from './slices/empSlice';
+import dashboardReducer from './slices/dashboardSlice';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     leave: leaveReducer,
     leaveBalance: leaveReducer,
     holiday: holidayReducer,
-    employees: empReducer
+    employees: empReducer,
+    dashboard: dashboardReducer
   },
 });

@@ -56,6 +56,7 @@ async function initializeDatabase() {
         casual_leave INT DEFAULT 12,
         sick_leave INT DEFAULT 10,
         paid_leave INT DEFAULT 15,
+        restricted_leave INT DEFAULT 3,
         FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
       )
     `);
@@ -93,10 +94,13 @@ async function initializeDatabase() {
 
     // If department values exist and designation is empty, copy department -> designation
     try {
-      await connection.query(
-        "UPDATE employees SET designation = department WHERE (designation IS NULL OR designation = '') AND (department IS NOT NULL AND department <> '')"
-      );
-      console.log('✅ Migrated department -> designation for existing employees where applicable');
+      const [deptColumns] = await connection.query("SHOW COLUMNS FROM employees LIKE 'department'");
+      if (deptColumns && deptColumns.length > 0) {
+        await connection.query(
+          "UPDATE employees SET designation = department WHERE (designation IS NULL OR designation = '') AND (department IS NOT NULL AND department <> '')"
+        );
+        console.log('✅ Migrated department -> designation for existing employees where applicable');
+      }
     } catch (e) {
       // Non-fatal; log and continue
       console.warn('Could not migrate department -> designation automatically:', e.message || e);
@@ -115,6 +119,114 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Create roles table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS roles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(50) UNIQUE NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create leave_master table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS leave_master (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        leave_name VARCHAR(100) UNIQUE NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Seed leave_master
+    await connection.query(`
+      INSERT IGNORE INTO leave_master (leave_name, description) VALUES
+      ('Earned leave', 'Standard earned leave balance'),
+      ('Quarterly leave', 'Early leave once per quarter')
+    `);
+
+    // Ensure earned_leave, quarterly_leave and restricted_leave columns exist in leave_balance for existing installs
+    const [balanceColumns] = await connection.query("SHOW COLUMNS FROM leave_balance");
+    const balanceColNames = balanceColumns.map(col => col.Field);
+    
+    if (!balanceColNames.includes('earned_leave')) {
+      await connection.query('ALTER TABLE leave_balance ADD COLUMN earned_leave INT DEFAULT 0');
+      console.log('✅ Added leave_balance.earned_leave column');
+    }
+    
+    if (!balanceColNames.includes('quarterly_leave')) {
+      await connection.query('ALTER TABLE leave_balance ADD COLUMN quarterly_leave INT DEFAULT 1');
+      console.log('✅ Added leave_balance.quarterly_leave column');
+    }
+
+    if (!balanceColNames.includes('restricted_leave')) {
+      await connection.query('ALTER TABLE leave_balance ADD COLUMN restricted_leave INT DEFAULT 3');
+      console.log('✅ Added leave_balance.restricted_leave column');
+    }
+
+    // Ensure duration and is_restricted columns exist in leave_requests
+    const [requestColumns] = await connection.query("SHOW COLUMNS FROM leave_requests");
+    const requestColNames = requestColumns.map(col => col.Field);
+    
+    if (!requestColNames.includes('duration')) {
+      await connection.query("ALTER TABLE leave_requests ADD COLUMN duration VARCHAR(50) DEFAULT 'Full Day'");
+      console.log('✅ Added leave_requests.duration column');
+    }
+    
+    if (!requestColNames.includes('is_restricted')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN is_restricted BOOLEAN DEFAULT FALSE');
+      console.log('✅ Added leave_requests.is_restricted column');
+    }
+
+    if (!requestColNames.includes('rejection_reason')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN rejection_reason TEXT');
+      console.log('✅ Added leave_requests.rejection_reason column');
+    }
+
+    // Change manager_id to VARCHAR to support multiple IDs
+    try {
+      const managerCol = requestColumns.find(c => c.Field === 'manager_id');
+      if (managerCol && managerCol.Type.toLowerCase().includes('int')) {
+        try {
+          await connection.query('ALTER TABLE leave_requests DROP FOREIGN KEY fk_manager');
+          console.log('✅ Dropped fk_manager');
+        } catch(e) {
+           // Ignore if it doesn't exist
+        }
+        await connection.query('ALTER TABLE leave_requests MODIFY manager_id VARCHAR(255)');
+        console.log('✅ Modified leave_requests.manager_id to VARCHAR(255)');
+      }
+    } catch (e) {
+      console.warn('Could not modify manager_id:', e.message || e);
+    }
+
+    // Change leave_balance columns to DECIMAL to support half days
+    try {
+      const earnedCol = balanceColumns.find(c => c.Field === 'earned_leave');
+      if (earnedCol && earnedCol.Type.toLowerCase().includes('int')) {
+        await connection.query('ALTER TABLE leave_balance MODIFY earned_leave DECIMAL(5,1) DEFAULT 0');
+        await connection.query('ALTER TABLE leave_balance MODIFY casual_leave DECIMAL(5,1) DEFAULT 12');
+        await connection.query('ALTER TABLE leave_balance MODIFY sick_leave DECIMAL(5,1) DEFAULT 10');
+        await connection.query('ALTER TABLE leave_balance MODIFY paid_leave DECIMAL(5,1) DEFAULT 15');
+        console.log('✅ Modified leave balances to DECIMAL');
+      }
+    } catch (e) {
+      console.warn('Could not modify leave balance types:', e.message || e);
+    }
+
+
+    // Seed roles
+    await connection.query(`
+      INSERT IGNORE INTO roles (name, description) VALUES
+      ('employee', 'Regular Employee'),
+      ('manager', 'Manager'),
+      ('admin', 'Administrator'),
+      ('hr', 'Human Resources'),
+      ('ceo', 'Chief Executive Officer')
+    `);
+
 
     connection.release();
     console.log('Database tables initialized successfully');

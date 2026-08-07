@@ -16,9 +16,9 @@ router.get('/', auth, async (req, res) => {
 
     const [employees] = await db.query(query, params);
 
-    res.json(employees);
+    res.json({ success: "true", message: "Employees fetched successfully", data: employees });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ success: "false", message: 'Server error' });
   }
 });
 

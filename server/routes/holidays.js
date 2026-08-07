@@ -27,9 +27,35 @@ router.get('/', auth, async (req, res) => {
       'SELECT * FROM holidays WHERE year = ? ORDER BY date ASC',
       [year]
     );
-    res.json(holidays);
+
+    const employeeId = req.user?.employee_id;
+    let balance = null;
+    if (employeeId) {
+      const [balanceByEmpId] = await db.query(
+        'SELECT * FROM leave_balance WHERE employee_id = ?',
+        [employeeId]
+      );
+      if (balanceByEmpId.length > 0) balance = balanceByEmpId[0];
+    }
+    const totalLeave = (balance?.casual_leave || 12) + (balance?.sick_leave || 10) + (balance?.paid_leave || 15);
+    const balanceLeave = balance?.earned_leave || 14; 
+    const earlyLeave = balance?.quarterly_leave !== undefined ? balance.quarterly_leave : 3;
+
+    res.json({
+      success: "true",
+      message: "Holiday fetch successfully",
+      data: {
+        holidayPeriod: `Jan ${year} - Dec ${year}`,
+        leaveSummary: {
+          totalLeave: String(totalLeave),
+          balanceLeave: String(balanceLeave),
+          earlyLeave: String(earlyLeave)
+        },
+        holidayData: holidays
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -95,12 +121,15 @@ router.post('/upload', auth, isManager, upload.single('file'), async (req, res) 
     }
 
     res.json({ 
+      success: "true",
       message: `Successfully imported ${imported} holidays`,
-      imported,
-      errors: errors.length > 0 ? errors : undefined
+      data: {
+        imported,
+        errors: errors.length > 0 ? errors : undefined
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -113,9 +142,9 @@ router.post('/', auth, isManager, async (req, res) => {
       [date, day, purpose, type || 'General', number_of_days || 1, year || new Date().getFullYear()]
     );
 
-    res.status(201).json({ message: 'Holiday added successfully', id: result.insertId });
+    res.status(201).json({ success: "true", message: 'Holiday added successfully', data: { id: result.insertId } });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -129,9 +158,9 @@ router.put('/:id', auth, isManager, async (req, res) => {
       [date, day, purpose, type, number_of_days, id]
     );
 
-    res.json({ message: 'Holiday updated successfully' });
+    res.json({ success: "true", message: 'Holiday updated successfully', data: {} });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -139,9 +168,9 @@ router.delete('/:id', auth, isManager, async (req, res) => {
   try {
     const { id } = req.params;
     await db.run('DELETE FROM holidays WHERE id = ?', [id]);
-    res.json({ message: 'Holiday deleted successfully' });
+    res.json({ success: "true", message: 'Holiday deleted successfully', data: {} });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -149,9 +178,9 @@ router.delete('/year/:year', auth, isManager, async (req, res) => {
   try {
     const { year } = req.params;
     await db.run('DELETE FROM holidays WHERE year = ?', [year]);
-    res.json({ message: `All holidays for ${year} deleted successfully` });
+    res.json({ success: "true", message: `All holidays for ${year} deleted successfully`, data: {} });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 

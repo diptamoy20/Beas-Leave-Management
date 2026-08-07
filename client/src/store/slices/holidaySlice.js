@@ -7,7 +7,7 @@ export const fetchHolidays = createAsyncThunk('holiday/fetchHolidays', async (_,
     const response = await axios.get('/api/holidays', {
       headers: { Authorization: `Bearer ${token}` }
     });
-    return response.data;
+    return response.data.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Failed to fetch holidays');
   }
@@ -28,7 +28,7 @@ const holidaySlice = createSlice({
       })
       .addCase(fetchHolidays.fulfilled, (state, action) => {
         state.loading = false;
-        state.holidays = action.payload;
+        state.holidays = action.payload.holidayData;
       })
       .addCase(fetchHolidays.rejected, (state, action) => {
         state.loading = false;

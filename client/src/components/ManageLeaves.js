@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Badge, Button } from 'react-bootstrap';
+import { Card, Badge, Button, Modal, Form } from 'react-bootstrap';
 import axios from 'axios';
 import DataTable from './common/DataTable';
 
 const ManageLeaves = () => {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectLeaveId, setRejectLeaveId] = useState(null);
+  const [rejectLeaveDays, setRejectLeaveDays] = useState(0);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     fetchAllLeaves();
@@ -17,7 +21,7 @@ const ManageLeaves = () => {
       const response = await axios.get('/api/leaves/all', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setLeaves(response.data);
+      setLeaves(response.data.data);
     } catch (error) {
       console.error('Error fetching leaves:', error);
     } finally {
@@ -25,17 +29,18 @@ const ManageLeaves = () => {
     }
   };
 
-  const handleStatusUpdate = async (leaveId, noOfDays, status) => {
+  const handleStatusUpdate = async (leaveId, noOfDays, status, rejection_reason = '') => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
         `/api/leaves/${leaveId}/status`,
-        { noOfDays, status },
+        { noOfDays, status, rejection_reason },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       fetchAllLeaves();
     } catch (error) {
       console.error('Error updating leave:', error);
+      alert(error.response?.data?.message || 'Failed to update leave');
     }
   };
 
@@ -108,7 +113,12 @@ const ManageLeaves = () => {
             <Button
               size="sm"
               variant="danger"
-              onClick={() => handleStatusUpdate(row.id, row.no_of_days, 'Rejected')}
+              onClick={() => {
+                setRejectLeaveId(row.id);
+                setRejectLeaveDays(row.no_of_days);
+                setRejectReason('');
+                setShowRejectModal(true);
+              }}
             >
               Reject
             </Button>
@@ -137,6 +147,42 @@ const ManageLeaves = () => {
           )}
         </Card.Body>
       </Card>
+
+      <Modal show={showRejectModal} onHide={() => setShowRejectModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Reject Leave Request</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>Reason for Rejection</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                placeholder="Enter reason for rejecting this leave..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                autoFocus
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowRejectModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              handleStatusUpdate(rejectLeaveId, rejectLeaveDays, 'Rejected', rejectReason);
+              setShowRejectModal(false);
+            }}
+            disabled={!rejectReason.trim()}
+          >
+            Confirm Reject
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

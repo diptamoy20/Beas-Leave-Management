@@ -7,7 +7,7 @@ export const fetchLeaves = createAsyncThunk('leave/fetchLeaves', async (_, { rej
     const response = await axios.get('/api/leaves/my-leaves', {
       headers: { Authorization: `Bearer ${token}` }
     });
-    return response.data;
+    return response.data.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Failed to fetch leaves');
   }
@@ -19,7 +19,7 @@ export const applyLeave = createAsyncThunk('leave/applyLeave', async (leaveData,
     const response = await axios.post('/api/leaves/apply', leaveData, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    return response.data;
+    return response.data.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Failed to apply leave');
   }
@@ -31,7 +31,7 @@ export const balanceLeave = createAsyncThunk('leaveBalance/balanceLeave', async 
     const response = await axios.get('/api/leaves/balance', {
       headers: { Authorization: `Bearer ${token}` }
     });
-    return response.data;
+    return response.data.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Failed to fetch leave balance');
   }
@@ -42,6 +42,7 @@ const leaveSlice = createSlice({
   initialState: {
     leaves: [],
     leaveBalance: null,
+    leaveBalanceObject: null,
     loading: false,
     error: null,
   },
@@ -80,7 +81,8 @@ const leaveSlice = createSlice({
       })
       .addCase(balanceLeave.fulfilled, (state, action) => {
         state.loading = false;
-        state.leaveBalance = action.payload;
+        state.leaveBalanceObject = action.payload;
+        state.leaveBalance = action.payload.earned_leave;
       })
       .addCase(balanceLeave.rejected, (state, action) => {
         state.loading = false;

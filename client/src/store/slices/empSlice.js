@@ -7,7 +7,7 @@ export const fetchEmployees = createAsyncThunk('employees/fetchss', async (_, { 
     const response = await axios.get('/api/employees', {
       headers: { Authorization: `Bearer ${token}` }
     });
-    return response.data;
+    return response.data.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Failed to fetch leaves');
   }

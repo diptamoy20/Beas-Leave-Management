@@ -575,12 +575,13 @@ body.dark-mode {
 }
 
 /* Cards */
-.home-dashboard-card{
-  padding: 50px 300px;
+.home-dashboard-card {
+  /* padding: 50px 300px; */
   transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
   /* border: 1px solid rgba(31, 78, 95, 0.16)!important;
   border-radius: 25px !important; */
 }
+
 .home-dashboard-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 28px 60px rgba(23, 43, 54, 0.1);

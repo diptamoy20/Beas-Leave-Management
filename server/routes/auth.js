@@ -18,7 +18,7 @@ router.post('/login', async (req, res) => {
     );
     
     if (users.length === 0) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+      return res.status(400).json({ success: "false", message: 'Invalid credentials' });
     }
 
     const user = users[0];
@@ -34,7 +34,7 @@ router.post('/login', async (req, res) => {
     }
     
     if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+      return res.status(400).json({ success: "false", message: 'Invalid credentials' });
     }
 
     const token = jwt.sign(
@@ -44,18 +44,22 @@ router.post('/login', async (req, res) => {
     );
 
     res.json({
-      token,
-      user: {
-        id: user.id,
-        employee_id: user.employee_id,
-        name: user.name,
-        email: user.email,
-        designation: user.designation,
-        role: user.role
+      success: "true",
+      message: "Login successful",
+      data: {
+        token,
+        user: {
+          id: user.id,
+          employee_id: user.employee_id,
+          name: user.name,
+          email: user.email,
+          designation: user.designation,
+          role: user.role
+        }
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -65,14 +69,14 @@ router.post('/reset-password', auth, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     
     if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+      return res.status(400).json({ success: "false", message: 'New password must be at least 6 characters' });
     }
 
     // Get current user
     const [users] = await db.query('SELECT * FROM employees WHERE id = ?', [req.user.id]);
     
     if (users.length === 0) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ success: "false", message: 'User not found' });
     }
 
     const user = users[0];
@@ -86,7 +90,7 @@ router.post('/reset-password', auth, async (req, res) => {
     }
     
     if (!isMatch) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
+      return res.status(400).json({ success: "false", message: 'Current password is incorrect' });
     }
 
     // Hash new password
@@ -98,9 +102,9 @@ router.post('/reset-password', auth, async (req, res) => {
       [hashedPassword, req.user.id]
     );
 
-    res.json({ message: 'Password reset successfully' });
+    res.json({ success: "true", message: 'Password reset successfully', data: {} });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -110,7 +114,7 @@ router.post('/forgot-password', async (req, res) => {
     const { identifier, newPassword } = req.body;
     
     if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+      return res.status(400).json({ success: "false", message: 'New password must be at least 6 characters' });
     }
 
     // Find user by email or employee_id
@@ -120,7 +124,7 @@ router.post('/forgot-password', async (req, res) => {
     );
     
     if (users.length === 0) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ success: "false", message: 'Employee not found' });
     }
 
     const user = users[0];
@@ -135,24 +139,27 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     res.json({ 
+      success: "true",
       message: 'Password reset successfully',
-      employee: {
-        name: user.name,
-        email: user.email,
-        employee_id: user.employee_id
+      data: {
+        employee: {
+          name: user.name,
+          email: user.email,
+          employee_id: user.employee_id
+        }
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
 router.get('/me', auth, async (req, res) => {
   try {
     const [users] = await db.query('SELECT id, employee_id, name, email, designation, role FROM employees WHERE id = ?', [req.user.id]);
-    res.json(users[0]);
+    res.json({ success: "true", message: "User info fetched", data: users[0] });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ success: "false", message: 'Server error' });
   }
 });
 

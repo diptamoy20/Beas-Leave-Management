@@ -31,7 +31,7 @@ const Attendance = () => {
       if (from) params.from = from;
       if (to) params.to = to;
       const res = await axios.get('/api/attendance/my-attendance', { headers: { Authorization: `Bearer ${token}` }, params });
-      const rows = res.data.rows || res.data || [];
+      const rows = res.data.data?.rows || res.data.data || [];
       setAttendance(rows);
 
       const todayStr = new Date().toISOString().slice(0, 10);

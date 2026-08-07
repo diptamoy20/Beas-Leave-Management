@@ -35,6 +35,8 @@ const AttendanceSummary = () => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
 
+
+
   useEffect(() => {
     fetchEmployees();
   }, []);
@@ -43,7 +45,7 @@ const AttendanceSummary = () => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get('/api/employees', { headers: { Authorization: `Bearer ${token}` } });
-      setEmployees(res.data || []);
+      setEmployees(res.data?.data || []);
     } catch (err) {
       console.error('Failed to fetch employees', err);
     }
@@ -64,52 +66,52 @@ const AttendanceSummary = () => {
         params,
       });
       // If server returned flattened rows, use them directly
-      if (res.data && Array.isArray(res.data.rows)) {
-        setResults(res.data.rows);
-      } else if (Array.isArray(res.data)) {
+      if (res.data?.data && Array.isArray(res.data.data.rows)) {
+        setResults(res.data.data.rows);
+      } else if (res.data?.data && Array.isArray(res.data.data)) {
         // Server returned raw attendance array (older/newer endpoints) - normalize for table
-          const mapped = res.data.map((a) => {
-            const dateYMD = a.date ? String(a.date).slice(0,10) : '';
-            const localDate = parseDateOnly(a.date || dateYMD);
-            const weekday = localDate ? localDate.getDay() : null; // 0=Sun,6=Sat
+        const mapped = res.data.data.map((a) => {
+          const dateYMD = a.date ? String(a.date).slice(0, 10) : '';
+          const localDate = parseDateOnly(a.date || dateYMD);
+          const weekday = localDate ? localDate.getDay() : null; // 0=Sun,6=Sat
 
-            // base normalized object
-            const obj = {
-              date: dateYMD,
-              employee_id: a.employee_id || a.emp_id || a.employeeId || '',
-              employee_name: a.employee_name || a.name || '',
-              clock_in: a.clock_in || a.clockIn || null,
-              clock_out: a.clock_out || a.clockOut || null,
-              total_time: a.total_time != null ? a.total_time : (a.totalTime != null ? a.totalTime : null),
-              leave_type: a.leave_type || null,
-              isLeave: !!(a.leave_type),
-              holiday_type: a.holiday_type || null,
-              holiday_purpose: a.holiday_purpose || null,
-              status: a.status || (a.clock_in ? 'present' : 'absent'),
-              statusText: a.statusText || (a.clock_in ? 'Present' : 'Absent'),
-            };
+          // base normalized object
+          const obj = {
+            date: dateYMD,
+            employee_id: a.employee_id || a.emp_id || a.employeeId || '',
+            employee_name: a.employee_name || a.name || '',
+            clock_in: a.clock_in || a.clockIn || null,
+            clock_out: a.clock_out || a.clockOut || null,
+            total_time: a.total_time != null ? a.total_time : (a.totalTime != null ? a.totalTime : null),
+            leave_type: a.leave_type || null,
+            isLeave: !!(a.leave_type),
+            holiday_type: a.holiday_type || null,
+            holiday_purpose: a.holiday_purpose || null,
+            status: a.status || (a.clock_in ? 'present' : 'absent'),
+            statusText: a.statusText || (a.clock_in ? 'Present' : 'Absent'),
+          };
 
-            // If weekend (sat/sun), mark as holiday and zero times
-            if (weekday === 0 || weekday === 6) {
-              const name = weekday === 0 ? 'sunday' : 'saturday';
-              obj.status = 'holiday';
-              obj.statusText = name;
-              obj.isLeave = true;
-              obj.leave_type = name;
-              obj.clock_in = null;
-              obj.clock_out = null;
-              obj.total_time = 0;
-              obj.holiday_type = name;
-            }
+          // If weekend (sat/sun), mark as holiday and zero times
+          if (weekday === 0 || weekday === 6) {
+            const name = weekday === 0 ? 'sunday' : 'saturday';
+            obj.status = 'holiday';
+            obj.statusText = name;
+            obj.isLeave = true;
+            obj.leave_type = name;
+            obj.clock_in = null;
+            obj.clock_out = null;
+            obj.total_time = 0;
+            obj.holiday_type = name;
+          }
 
-            return obj;
-          });
-          setResults(mapped);
+          return obj;
+        });
+        setResults(mapped);
       } else {
         // fallback: if older response shape, try to reconstruct day-wise rows client-side
-        const attendanceRows = res.data.attendance || [];
-        const leaves = res.data.leaves || [];
-        const holidays = res.data.holidays || [];
+        const attendanceRows = res.data?.data?.attendance || [];
+        const leaves = res.data?.data?.leaves || [];
+        const holidays = res.data?.data?.holidays || [];
         // reconstruct day-wise rows (existing client-side fallback)
         let startDate = fromDate ? parseDateOnly(fromDate) : null;
         let endDate = toDate ? parseDateOnly(toDate) : null;
@@ -195,11 +197,11 @@ const AttendanceSummary = () => {
     if (!results || results.length === 0) return;
     const formatDateYMD = (ymd) => {
       if (!ymd) return '';
-      const s = String(ymd).slice(0,10);
+      const s = String(ymd).slice(0, 10);
       const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (m) return `${m[3]}-${m[2]}-${m[1]}`;
       const d = new Date(ymd);
-      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+      return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
     };
     const formatTimeOnly = (dt) => {
       if (!dt) return '';
@@ -226,21 +228,23 @@ const AttendanceSummary = () => {
   };
 
   const columns = [
-    { name: 'Date', selector: (r) => {
+    {
+      name: 'Date', selector: (r) => {
         if (!r.date) return '-';
-        const s = String(r.date).slice(0,10);
+        const s = String(r.date).slice(0, 10);
         const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (m) return `${m[3]}-${m[2]}-${m[1]}`;
         const d = parseDateOnly(r.date);
         if (!d) return '-';
-        return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
-      }, sortable: true, width: '130px' },
+        return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+      }, sortable: true, width: '130px'
+    },
     { name: 'Day', selector: (r) => getWeekdayLabel(r.date), sortable: true, width: '140px' },
     { name: 'Employee ID', selector: (r) => r.employee_id, sortable: true },
     { name: 'Name', selector: (r) => r.employee_name, sortable: true },
     { name: 'Clock In', selector: (r) => (r.clock_in ? new Date(r.clock_in).toLocaleTimeString() : '-'), sortable: true },
     { name: 'Clock Out', selector: (r) => (r.clock_out ? new Date(r.clock_out).toLocaleTimeString() : '-'), sortable: true },
-    { name: 'Total Time', selector: (r) => (r.total_time == null ? '-' : `${Math.floor(r.total_time/60)}h ${r.total_time%60}m`) },
+    { name: 'Total Time', selector: (r) => (r.total_time == null ? '-' : `${Math.floor(r.total_time / 60)}h ${r.total_time % 60}m`) },
     { name: 'Leave', selector: (r) => r.isLeave ? r.leave_type || 'Leave' : (r.leave_type || '-'), sortable: true },
     { name: 'Holiday', selector: (r) => r.holiday_type ? `${r.holiday_type}${r.holiday_purpose ? ` - ${r.holiday_purpose}` : ''}` : '-', sortable: true },
   ];

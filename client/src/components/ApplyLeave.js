@@ -1,69 +1,103 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Form, Button, Alert, Row, Col, ListGroup } from 'react-bootstrap';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { Card, Form, Button, Alert, Row, Col, ListGroup, Badge } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { applyLeave, fetchLeaves } from '../store/slices/leaveSlice';
-import { fetchEmployees } from '../store/slices/empSlice';
-import { fetchHolidays } from '../store/slices/holidaySlice';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import axios from 'axios';
 
 const ApplyLeave = () => {
   const dispatch = useDispatch();
-  const { loading } = useSelector((state) => state.leave);
+  const { loading, leaves } = useSelector((state) => state.leave);
   const { user } = useSelector((state) => state.auth);
-  const { employees, loading: employeesLoading } = useSelector((state) => state.employees);  
-  const { holidays } = useSelector((state) => state.holiday);
-  const { leaves } = useSelector((state) => state.leave);
+
+  const [metaData, setMetaData] = useState(null);
+  const [metaLoading, setMetaLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     employee_id: user?.employee_id,
-    leave_type: 'Earned Leave',
     start_date: null,
     end_date: null,
-    no_of_days: '',
+    duration: 'Full Day', // Maps to Type of leave (Half/Full/Quarterly)
+    is_restricted: false,
+    no_of_days: '', // Mapped to Duration calculated field
     reason: '',
-    manager_id: '',
+    manager_id: [], // array of selected manager IDs
   });
-  const [includeRestricted, setIncludeRestricted] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+
   const [approverQuery, setApproverQuery] = useState('');
   const [showApproverResults, setShowApproverResults] = useState(false);
+  const wrapperRef = useRef(null);
+
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    dispatch(fetchEmployees());
-    dispatch(fetchHolidays());
     dispatch(fetchLeaves());
+
+    const fetchMeta = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('/api/leaves/apply-meta', { headers: { Authorization: `Bearer ${token}` } });
+        setMetaData(res.data.data);
+      } catch (err) {
+        console.error("Failed to fetch apply meta data", err);
+      } finally {
+        setMetaLoading(false);
+      }
+    };
+    fetchMeta();
   }, [dispatch]);
 
+  // Click outside listener for dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setShowApproverResults(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [wrapperRef]);
+
+  const holidays = metaData?.holidays || [];
+
   const approverOptions = useMemo(() => {
-    const list = Array.isArray(employees) ? employees : [];
+    const list = metaData?.authorities || [];
     return list.map((emp) => ({
       id: emp.id,
       value: String(emp.employee_id ?? ''),
       label: String(emp.name ?? ''),
+      designation: String(emp.designation ?? 'Employee')
     }));
-  }, [employees]);
-
-  const selectedApprover = useMemo(() => {
-    const v = String(formData.manager_id ?? '');
-    if (!v) return null;
-    return approverOptions.find((o) => o.value === v) || null;
-  }, [approverOptions, formData.manager_id]);
-
-  useEffect(() => {
-    if (selectedApprover && !approverQuery) {
-      setApproverQuery(selectedApprover.label);
-    }
-  }, [selectedApprover, approverQuery]);
+  }, [metaData]);
 
   const filteredApprovers = useMemo(() => {
     const q = approverQuery.trim().toLowerCase();
     if (!q) return approverOptions.slice(0, 30);
     return approverOptions
-      .filter((o) => `${o.label} ${o.value}`.toLowerCase().includes(q))
+      .filter((o) => `${o.label} ${o.designation}`.toLowerCase().includes(q))
       .slice(0, 30);
   }, [approverOptions, approverQuery]);
+
+  const selectedApproverDetails = useMemo(() => {
+    return formData.manager_id.map(id => approverOptions.find(opt => opt.value === id)).filter(Boolean);
+  }, [formData.manager_id, approverOptions]);
+
+  const toggleApprover = (id) => {
+    setFormData(prev => {
+      const isSelected = prev.manager_id.includes(id);
+      if (isSelected) {
+        return { ...prev, manager_id: prev.manager_id.filter(m => m !== id) };
+      } else {
+        return { ...prev, manager_id: [...prev.manager_id, id] };
+      }
+    });
+  };
+
+  const removeApprover = (id) => {
+    setFormData(prev => ({ ...prev, manager_id: prev.manager_id.filter(m => m !== id) }));
+  };
 
   const toYmd = (d) => {
     if (!d) return '';
@@ -71,54 +105,47 @@ const ApplyLeave = () => {
   };
 
   const generalHolidayDates = useMemo(() => {
-    return new Set(
-      (holidays || [])
-        .filter((h) => h.type === 'General')
-        .map((h) => String(h.date).split('T')[0])
-    );
+    return new Set(holidays.filter((h) => !h.restricted).map((h) => String(h.date)));
   }, [holidays]);
 
   const restrictedHolidayDates = useMemo(() => {
-    return new Set(
-      (holidays || [])
-        .filter((h) => h.type === 'Restricted')
-        .map((h) => String(h.date).split('T')[0])
-    );
+    return new Set(holidays.filter((h) => h.restricted).map((h) => String(h.date)));
   }, [holidays]);
 
   const blockedLeaveDates = useMemo(() => {
     const set = new Set();
-    (leaves || [])
-      .filter((l) => l.status === 'Pending' || l.status === 'Approved')
-      .forEach((l) => {
-        const start = new Date(l.start_date);
-        const end = new Date(l.end_date);
-        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
-
-        const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
-        const endUtc = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
-        while (cursor <= endUtc) {
-          set.add(toYmd(cursor));
-          cursor.setUTCDate(cursor.getUTCDate() + 1);
-        }
-      });
+    (leaves || []).filter((l) => l.status === 'Pending' || l.status === 'Approved').forEach((l) => {
+      const start = new Date(l.start_date);
+      const end = new Date(l.end_date);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+      const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+      const endUtc = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+      while (cursor <= endUtc) {
+        set.add(toYmd(cursor));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+    });
     return set;
   }, [leaves]);
 
-  // Calculate no_of_days whenever dates or includeRestricted changes
-  useEffect(() => {    
-    const { start_date, end_date } = formData;
+  useEffect(() => {
+    const { start_date, end_date, duration, is_restricted } = formData;
     if (!start_date || !end_date) {
       setFormData((prev) => ({ ...prev, no_of_days: '' }));
       return;
     }
 
-    const restrictedDates = new Set(
-      holidays
-        .filter((h) => h.type === 'Restricted')
-        .map((h) => h.date.split('T')[0])
-    );
+    if (duration === 'Quarterly Leave') {
+      setFormData((prev) => ({ ...prev, no_of_days: 1 }));
+      return;
+    }
 
+    if (duration === 'Half Day') {
+      setFormData((prev) => ({ ...prev, no_of_days: 0.5 }));
+      return;
+    }
+
+    const restrictedDates = new Set(holidays.filter((h) => h.restricted).map((h) => String(h.date)));
     let count = 0;
     const current = new Date(start_date);
     const end = new Date(end_date);
@@ -131,42 +158,48 @@ const ApplyLeave = () => {
 
       if (!isWeekend) {
         if (isRestricted) {
-          if (includeRestricted) count++;
-          // else skip
+          if (is_restricted) count++;
         } else {
           count++;
         }
       }
-
       current.setDate(current.getDate() + 1);
     }
-
     setFormData((prev) => ({ ...prev, no_of_days: count }));
-  }, [formData.start_date, formData.end_date, includeRestricted, holidays]);
+  }, [formData.start_date, formData.end_date, formData.duration, formData.is_restricted, holidays]);
 
   const formatDate = (date) => toYmd(date);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.manager_id.length === 0) {
+      setError('Please select at least one approval authority');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    const finalData = {
+      ...formData,
+      leave_type: formData.duration,
+      start_date: formatDate(formData.start_date),
+      end_date: formatDate(formData.end_date),
+      manager_id: formData.manager_id.join(',')
+    };
+
     try {
-      await dispatch(applyLeave({
-        ...formData,
-        start_date: formatDate(formData.start_date),
-        end_date: formatDate(formData.end_date),
-      })).unwrap();
+      await dispatch(applyLeave(finalData)).unwrap();
       setSuccess(true);
       setFormData({
         employee_id: user?.employee_id,
-        leave_type: 'Earned Leave',
-        start_date: '',
-        end_date: '',
+        start_date: null,
+        end_date: null,
+        duration: 'Full Day',
+        is_restricted: false,
         no_of_days: '',
         reason: '',
-        manager_id: '',
+        manager_id: [],
       });
       setApproverQuery('');
-      setShowApproverResults(false);
-      setIncludeRestricted(false);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       const msg = typeof err === 'string' ? err : err?.message || "Something went wrong";
@@ -184,7 +217,7 @@ const ApplyLeave = () => {
     if (isWeekend(date)) return false;
     const key = toYmd(date);
     if (generalHolidayDates.has(key)) return false;
-    if (restrictedHolidayDates.has(key) && !includeRestricted) return false;
+    if (restrictedHolidayDates.has(key) && !formData.is_restricted) return false;
     if (blockedLeaveDates.has(key)) return false;
     return true;
   };
@@ -196,36 +229,59 @@ const ApplyLeave = () => {
     if (blockedLeaveDates.has(key)) return 'datepicker-day--leave-blocked';
     return undefined;
   };
+
+  const totalLeave = metaData?.totalLeave || 0;
+  const balanceLeaveCount = metaData?.['balance Leave'] || 0;
+  const restrictedLeaveCount = metaData?.restrictedLieve ?? 1;
+  const quarterlyLeaveCount = 4; // Not specified in spec, defaulting to 4
+
   return (
     <div>
       <h4 className="mb-4 dashboard-toggle">Apply for Leave</h4>
+
+      {/* Leave Balance Section */}
+      <Row className="mb-4">
+        <Col md={3}>
+          <Card className="stat-card blue text-center py-3">
+            <div className="stat-label">Total Leave</div>
+            <div className="stat-value text-primary">{totalLeave}</div>
+          </Card>
+        </Col>
+        <Col md={3}>
+          <Card className="stat-card green text-center py-3">
+            <div className="stat-label">Balance Leave</div>
+            <div className="stat-value text-success">{balanceLeaveCount}</div>
+          </Card>
+        </Col>
+        <Col md={3}>
+          <Card className="stat-card orange text-center py-3">
+            <div className="stat-label">Restricted</div>
+            <div className="stat-value text-warning">{restrictedLeaveCount}</div>
+          </Card>
+        </Col>
+        <Col md={3}>
+          <Card className="stat-card orange text-center py-3">
+            <div className="stat-label">Quarterly</div>
+            <div className="stat-value text-warning">{quarterlyLeaveCount}</div>
+          </Card>
+        </Col>
+      </Row>
+
       <Row>
         <Col lg={12}>
           <Card className="home-dashboard-card">
             <Card.Body>
               {success && <Alert variant="success">Leave application submitted successfully!</Alert>}
               {error && <Alert variant="danger">{error}</Alert>}
-              <Form onSubmit={handleSubmit}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Leave Type</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Leave Type"
-                    value={formData.leave_type}
-                    // onChange={(e) => setFormData({ ...formData, leave_type: 'Earned Leave' })}
-                    disabled
-                  />
-                </Form.Group>
 
+              <Form onSubmit={handleSubmit}>
                 <Row>
-                  <Col>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Start Date</Form.Label>
+                  <Col md={6}>
+                    <Form.Group className="mb-3 d-flex justify-content-between align-items-center">
+                      <Form.Label>Start Date <span className="text-danger">*</span></Form.Label>
                       <DatePicker
-                        selected={formData.start_date ? new Date(formData.start_date) : null}
-                        onChange={(date) =>
-                          setFormData({ ...formData, start_date: date })
-                        }
+                        selected={formData.start_date}
+                        onChange={(date) => setFormData({ ...formData, start_date: date, end_date: date })}
                         filterDate={isSelectableDate}
                         dayClassName={dayClassName}
                         dateFormat="dd-MM-yyyy"
@@ -235,14 +291,12 @@ const ApplyLeave = () => {
                     </Form.Group>
                   </Col>
 
-                  <Col>
-                    <Form.Group className="mb-3">
-                      <Form.Label>End Date</Form.Label>
+                  <Col md={6}>
+                    <Form.Group className="mb-3 d-flex justify-content-between align-items-center">
+                      <Form.Label>End Date <span className="text-danger">*</span></Form.Label>
                       <DatePicker
-                        selected={formData.end_date ? new Date(formData.end_date) : null}
-                        onChange={(date) =>
-                          setFormData({ ...formData, end_date: date })
-                        }
+                        selected={formData.end_date}
+                        onChange={(date) => setFormData({ ...formData, end_date: date })}
                         filterDate={isSelectableDate}
                         dayClassName={dayClassName}
                         minDate={formData.start_date}
@@ -255,62 +309,81 @@ const ApplyLeave = () => {
                 </Row>
 
                 <Row>
-                  <Col>
+                  <Col md={6}>
                     <Form.Group className="mb-3">
-                      <Form.Label>No of Days</Form.Label>
-                      <Form.Control
-                        type="text"
-                        placeholder="No of Days"
-                        value={formData.no_of_days}
-                        // onChange={(e) => setFormData({ ...formData, leave_type: 'Earned Leave' })}
-                        disabled
-                      />
+                      <Form.Label>Type of leave</Form.Label>
+                      <div className="d-flex gap-3">
+                        <Form.Check
+                          type="radio"
+                          label="Full Day"
+                          name="duration"
+                          checked={formData.duration === 'Full Day'}
+                          onChange={() => setFormData({ ...formData, duration: 'Full Day' })}
+                        />
+                        <Form.Check
+                          type="radio"
+                          label="Half Day"
+                          name="duration"
+                          checked={formData.duration === 'Half Day'}
+                          onChange={() => setFormData({ ...formData, duration: 'Half Day' })}
+                        />
+                        <Form.Check
+                          type="radio"
+                          label="Quarterly Leave"
+                          name="duration"
+                          checked={formData.duration === 'Quarterly Leave'}
+                          onChange={() => setFormData({ ...formData, duration: 'Quarterly Leave' })}
+                        />
+                      </div>
                     </Form.Group>
                   </Col>
-                  <Col>
+
+                  <Col md={6}>
                     <Form.Group className="mb-3">
-                      <Form.Label>Include Restricted Holiday</Form.Label>
-                      <Form.Select
-                        value={includeRestricted ? 'yes' : 'no'}
-                        onChange={(e) => setIncludeRestricted(e.target.value === 'yes')}
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </Form.Select>
+                      <Form.Label>Duration</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="0"
+                        value={formData.no_of_days}
+                        disabled
+                      />
                     </Form.Group>
                   </Col>
                 </Row>
 
                 <Form.Group className="mb-3">
-                  <Form.Label>Leave Approver</Form.Label>
-                  <div style={{ position: 'relative' }}>
-                    <Form.Control
-                      type="text"
-                      placeholder={employeesLoading ? 'Loading approvers...' : 'Search approver...'}
-                      value={approverQuery}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setApproverQuery(next);
-                        setShowApproverResults(true);
-                        setFormData((prev) => ({ ...prev, manager_id: '' }));
-                      }}
-                      onFocus={() => setShowApproverResults(true)}
-                      onBlur={() => {
-                        window.setTimeout(() => setShowApproverResults(false), 150);
-                      }}
-                      disabled={employeesLoading}
-                      autoComplete="off"
-                    />
+                  <Form.Label>Approval Authority</Form.Label>
+                  <div style={{ position: 'relative' }} ref={wrapperRef}>
+                    <div className="form-control d-flex flex-wrap gap-1 align-items-center" style={{ minHeight: '40px', cursor: 'text' }} onClick={() => setShowApproverResults(true)}>
+                      {selectedApproverDetails.map(emp => (
+                        <Badge bg="primary" key={emp.value} className="d-flex align-items-center me-1 mb-1 p-2">
+                          {emp.label}
+                          <i
+                            className="bi bi-x-circle ms-2"
+                            style={{ cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeApprover(emp.value);
+                            }}
+                          ></i>
+                        </Badge>
+                      ))}
+                      <input
+                        type="text"
+                        style={{ border: 'none', outline: 'none', flex: 1, minWidth: '150px' }}
+                        placeholder={metaLoading ? 'Loading...' : (selectedApproverDetails.length === 0 ? 'Search approver...' : '')}
+                        value={approverQuery}
+                        onChange={(e) => {
+                          setApproverQuery(e.target.value);
+                          setShowApproverResults(true);
+                        }}
+                        onFocus={() => setShowApproverResults(true)}
+                        disabled={metaLoading}
+                        autoComplete="off"
+                      />
+                    </div>
 
-                    <Form.Control
-                      type="hidden"
-                      name="manager_id"
-                      value={formData.manager_id}
-                      required
-                      readOnly
-                    />
-
-                    {showApproverResults && !employeesLoading && filteredApprovers.length > 0 && (
+                    {showApproverResults && !metaLoading && filteredApprovers.length > 0 && (
                       <ListGroup
                         style={{
                           position: 'absolute',
@@ -320,22 +393,27 @@ const ApplyLeave = () => {
                           zIndex: 20,
                           maxHeight: 220,
                           overflowY: 'auto',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                         }}
                       >
                         {filteredApprovers.map((o) => (
                           <ListGroup.Item
                             key={o.id ?? o.value}
                             action
-                            onMouseDown={(e) => e.preventDefault()}
+                            active={formData.manager_id.includes(o.value)}
                             onClick={() => {
-                              setFormData((prev) => ({ ...prev, manager_id: o.value }));
-                              setApproverQuery(o.label);
-                              setShowApproverResults(false);
+                              toggleApprover(o.value);
+                              setApproverQuery('');
                             }}
                           >
-                            <div className="d-flex justify-content-between">
-                              <span>{o.label}</span>
-                              <span className="text-muted">{o.value}</span>
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <strong>{o.label}</strong>
+                                <div className="text-muted" style={{ fontSize: '0.85rem' }}>{o.designation}</div>
+                              </div>
+                              {formData.manager_id.includes(o.value) && (
+                                <i className="bi bi-check-lg text-primary"></i>
+                              )}
                             </div>
                           </ListGroup.Item>
                         ))}
@@ -344,6 +422,14 @@ const ApplyLeave = () => {
                   </div>
                 </Form.Group>
 
+                <Form.Group className="mb-3">
+                  <Form.Check
+                    type="checkbox"
+                    label="Want to add restricted holiday"
+                    checked={formData.is_restricted}
+                    onChange={(e) => setFormData({ ...formData, is_restricted: e.target.checked })}
+                  />
+                </Form.Group>
 
                 <Form.Group className="mb-3">
                   <Form.Label>Reason</Form.Label>

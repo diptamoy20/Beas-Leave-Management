@@ -4,16 +4,19 @@ import { useSelector, useDispatch } from 'react-redux';
 import { FiCalendar, FiCheckCircle, FiClock, FiTrendingUp } from 'react-icons/fi';
 import { balanceLeave, fetchLeaves } from '../store/slices/leaveSlice';
 import { fetchHolidays } from '../store/slices/holidaySlice';
+import { fetchDashboardData } from '../store/slices/dashboardSlice';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const { leaves, leaveBalance, loading: leavesLoading } = useSelector((state) => state.leave);
   const { holidays, loading: holidaysLoading } = useSelector((state) => state.holiday);
+  const { data: dashboardData, loading: dashboardLoading } = useSelector((state) => state.dashboard);
 
   useEffect(() => {
     dispatch(fetchLeaves());
     dispatch(fetchHolidays());
+    dispatch(fetchDashboardData());
   }, [dispatch]);
 
   // const fetchBalance = async () => {
@@ -52,12 +55,13 @@ const Dashboard = () => {
     };
   }, [leaves]);
 
-  // Get recent activities (latest 5 leaves)
+  // Get recent activities from dashboard API
   const recentActivities = useMemo(() => {
-    return [...leaves]
-      .sort((a, b) => new Date(b.created_at || b.start_date) - new Date(a.created_at || a.start_date))
-      .slice(0, 5);
-  }, [leaves]);
+    if (dashboardData && dashboardData.leaveRequests) {
+      return dashboardData.leaveRequests.slice(0, 5);
+    }
+    return [];
+  }, [dashboardData]);
 
   // Get upcoming holidays (next 5)
   const upcomingHolidays = useMemo(() => {
@@ -91,27 +95,21 @@ const Dashboard = () => {
   const statsCards = [
     {
       title: 'Total Leaves',
-      value: stats.total,
+      value: dashboardData?.leaveSummary?.totalLeave || '0',
       icon: <FiCalendar />,
       color: '#405189',
     },
     {
-      title: 'Approved',
-      value: stats.approved,
+      title: 'Leave Balance',
+      value: dashboardData?.leaveSummary?.balanceLeave || '0',
       icon: <FiCheckCircle />,
       color: '#0ab39c',
     },
     {
-      title: 'Pending',
-      value: stats.pending,
+      title: 'Early Leaves',
+      value: dashboardData?.leaveSummary?.earlyLeave || '0',
       icon: <FiClock />,
       color: '#f7b84b',
-    },
-    {
-      title: 'Rejected',
-      value: stats.rejected,
-      icon: <FiTrendingUp />,
-      color: '#f06548',
     },
   ];
 
@@ -250,7 +248,7 @@ const Dashboard = () => {
           <Card className="dashboard-card">
             <Card.Body>
               <h5 className="mb-3">Recent Activity</h5>
-              {leavesLoading ? (
+              {dashboardLoading ? (
                 <div className="text-center py-3">
                   <Spinner animation="border" size="sm" />
                 </div>
@@ -259,18 +257,23 @@ const Dashboard = () => {
                   {recentActivities.map((leave) => (
                     <div key={leave.id} className="activity-item d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
                       <div>
-                        <div className="fw-semibold">{leave.leave_type}</div>
+                        <div className="fw-semibold">{leave.leave_type || leave.type}</div>
                         <small className="text-muted">
-                          {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
+                          {leave.start_date ? formatDate(leave.start_date) : formatDate(leave.fromDate)} - {leave.end_date ? formatDate(leave.end_date) : formatDate(leave.toDate)}
                         </small>
                         {leave.reason && (
                           <div className="mt-1">
                             <small className="text-muted">{leave.reason}</small>
                           </div>
                         )}
+                        {leave.applicationType && (
+                          <div className="mt-1">
+                            <Badge bg="info">{leave.applicationType}</Badge>
+                          </div>
+                        )}
                       </div>
                       <div>
-                        {getStatusBadge(leave.status)}
+                        {getStatusBadge(leave.status?.toLowerCase() || 'pending')}
                       </div>
                     </div>
                   ))}

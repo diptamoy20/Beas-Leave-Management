@@ -63,10 +63,10 @@ function getAttendanceDateKey(attendanceRow) {
 
 // Start device -> DB sync once (cron/interval).
 // This is attendance-only; it runs in the background and keeps the `attendance` table updated.
-if (!global.__attendanceDeviceSyncStarted) {
-  global.__attendanceDeviceSyncStarted = true;
-  startAttendanceDeviceSync();
-}
+// if (!global.__attendanceDeviceSyncStarted) {
+//   global.__attendanceDeviceSyncStarted = true;
+//   startAttendanceDeviceSync();
+// }
 
 router.post('/clock-in', auth, async (req, res) => {
   try {
@@ -74,7 +74,7 @@ router.post('/clock-in', auth, async (req, res) => {
 
     // Get employee_id from employees table
     const [empData] = await db.query('SELECT employee_id FROM employees WHERE id = ?', [req.user.id]);
-    if (!empData.length) return res.status(404).json({ message: 'Employee not found' });
+    if (!empData.length) return res.status(404).json({ success: "false", message: 'Employee not found' });
     const employeeId = empData[0].employee_id;
 
     const [existing] = await db.query(
@@ -83,7 +83,7 @@ router.post('/clock-in', auth, async (req, res) => {
     );
 
     if (existing.length > 0) {
-      return res.status(400).json({ message: 'Already clocked in today' });
+      return res.status(400).json({ success: "false", message: 'Already clocked in today' });
     }
 
     const clockInTime = new Date().toISOString();
@@ -92,9 +92,9 @@ router.post('/clock-in', auth, async (req, res) => {
       [employeeId, today, clockInTime]
     );
 
-    res.json({ message: 'Clocked in successfully', clock_in: clockInTime });
+    res.json({ success: "true", message: 'Clocked in successfully', data: { clock_in: clockInTime } });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -104,7 +104,7 @@ router.post('/clock-out', auth, async (req, res) => {
 
     // Get employee_id from employees table
     const [empData] = await db.query('SELECT employee_id FROM employees WHERE id = ?', [req.user.id]);
-    if (!empData.length) return res.status(404).json({ message: 'Employee not found' });
+    if (!empData.length) return res.status(404).json({ success: "false", message: 'Employee not found' });
     const employeeId = empData[0].employee_id;
 
     const [existing] = await db.query(
@@ -113,11 +113,11 @@ router.post('/clock-out', auth, async (req, res) => {
     );
 
     if (existing.length === 0) {
-      return res.status(400).json({ message: 'No clock-in record found for today' });
+      return res.status(400).json({ success: "false", message: 'No clock-in record found for today' });
     }
 
     if (existing[0].clock_out) {
-      return res.status(400).json({ message: 'Already clocked out today' });
+      return res.status(400).json({ success: "false", message: 'Already clocked out today' });
     }
 
     const clockOutTime = new Date().toISOString();
@@ -132,9 +132,9 @@ router.post('/clock-out', auth, async (req, res) => {
       [clockOutTime, clockOutTime, employeeId, today]
     );
 
-    res.json({ message: 'Clocked out successfully', clock_out: clockOutTime });
+    res.json({ success: "true", message: 'Clocked out successfully', data: { clock_out: clockOutTime } });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
@@ -142,7 +142,7 @@ router.get('/my-attendance', auth, async (req, res) => {
   try {
     // Get employee_id from employees table
     const [empData] = await db.query('SELECT employee_id FROM employees WHERE id = ?', [req.user.id]);
-    if (!empData.length) return res.status(404).json({ message: 'Employee not found' });
+    if (!empData.length) return res.status(404).json({ success: "false", message: 'Employee not found' });
     const employeeId = empData[0].employee_id;
     const { from, to } = req.query;
 
@@ -243,7 +243,7 @@ router.get('/my-attendance', auth, async (req, res) => {
         rows.push(row);
       }
 
-      return res.json({ rows });
+      return res.json({ success: "true", message: "Attendance rows fetched", data: { rows } });
     }
 
     // fallback: return raw attendance rows with leave/holiday joins
@@ -257,9 +257,9 @@ router.get('/my-attendance', auth, async (req, res) => {
        ORDER BY a.date DESC`,
       [employeeId]
     );
-    res.json(attendance);
+    res.json({ success: "true", message: "Attendance fetched", data: attendance });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ success: "false", message: 'Server error' });
   }
 });
 
@@ -273,9 +273,9 @@ router.get('/all', auth, isManager, async (req, res) => {
        LEFT JOIN holidays h ON a.date = h.date
        ORDER BY a.date DESC`
     );
-    res.json(attendance);
+    res.json({ success: "true", message: "All attendance fetched", data: attendance });
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ success: "false", message: 'Server error' });
   }
 });
 
@@ -313,7 +313,7 @@ router.get('/summary', auth, isManager, async (req, res) => {
       );
 
       if (!empRows.length) {
-        return res.status(404).json({ message: 'Employee not found' });
+        return res.status(404).json({ success: "false", message: 'Employee not found' });
       }
 
       const empDbId = empRows[0].id;
@@ -439,7 +439,7 @@ router.get('/summary', auth, isManager, async (req, res) => {
         d.setDate(d.getDate() + 1);
       }
 
-      return res.json({ rows });
+      return res.json({ success: "true", message: "Summary rows fetched", data: { rows } });
     }
 
     // ✅ FALLBACK (simple query)
@@ -466,10 +466,11 @@ router.get('/summary', auth, isManager, async (req, res) => {
       date: formatDateLocal(a.date),
     }));
 
-    res.json(normalized);
+    res.json({ success: "true", message: "Summary fetched", data: normalized });
 
   } catch (error) {
     res.status(500).json({
+      success: "false",
       message: 'Server error',
       error: error.message,
     });

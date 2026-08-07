@@ -58,7 +58,7 @@ const Holidays = () => {
           'Content-Type': 'multipart/form-data'
         }
       });
-      alert(response.data.message + (response.data.errors ? '\n\nErrors:\n' + response.data.errors.join('\n') : ''));
+      alert(response.data.message + (response.data.data?.errors ? '\n\nErrors:\n' + response.data.data.errors.join('\n') : ''));
       setShowUploadModal(false);
       setUploadFile(null);
       fetchHolidaysData();
