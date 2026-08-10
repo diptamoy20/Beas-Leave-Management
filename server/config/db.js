@@ -48,6 +48,18 @@ async function initializeDatabase() {
       )
     `);
 
+    // Create leave_approvals table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS leave_approvals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        leave_id INT NOT NULL,
+        manager_id VARCHAR(255) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (leave_id) REFERENCES leave_requests(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create leave_balance table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS leave_balance (

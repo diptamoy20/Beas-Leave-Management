@@ -1,12 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, Badge } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchLeaves } from '../store/slices/leaveSlice';
 import DataTable from './common/DataTable';
+import LeaveDetails from './LeaveDetails';
 
 const MyLeaves = () => {
   const dispatch = useDispatch();
   const { leaves, loading } = useSelector((state) => state.leave);
+  const [selectedLeave, setSelectedLeave] = useState(null);
 
   useEffect(() => {
     dispatch(fetchLeaves());
@@ -61,6 +63,10 @@ const MyLeaves = () => {
     },
   ];
 
+  if (selectedLeave) {
+    return <LeaveDetails leave={selectedLeave} onBack={() => setSelectedLeave(null)} />;
+  }
+
   return (
     <div>
       <h4 className="mb-4 dashboard-toggle">My Leave Requests</h4>
@@ -75,6 +81,9 @@ const MyLeaves = () => {
               pagination
               paginationPerPage={10}
               paginationRowsPerPageOptions={[10, 20, 30]}
+              onRowClicked={(row) => setSelectedLeave(row)}
+              pointerOnHover
+              highlightOnHover
             />
           )}
         </Card.Body>

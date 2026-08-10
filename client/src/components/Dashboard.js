@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Row, Col, Card, Badge, Spinner } from 'react-bootstrap';
 import { useSelector, useDispatch } from 'react-redux';
 import { FiCalendar, FiCheckCircle, FiClock, FiTrendingUp } from 'react-icons/fi';
 import { balanceLeave, fetchLeaves } from '../store/slices/leaveSlice';
 import { fetchHolidays } from '../store/slices/holidaySlice';
 import { fetchDashboardData } from '../store/slices/dashboardSlice';
+import LeaveDetails from './LeaveDetails';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -12,6 +13,7 @@ const Dashboard = () => {
   const { leaves, leaveBalance, loading: leavesLoading } = useSelector((state) => state.leave);
   const { holidays, loading: holidaysLoading } = useSelector((state) => state.holiday);
   const { data: dashboardData, loading: dashboardLoading } = useSelector((state) => state.dashboard);
+  const [selectedLeave, setSelectedLeave] = useState(null);
 
   useEffect(() => {
     dispatch(fetchLeaves());
@@ -220,6 +222,10 @@ const Dashboard = () => {
     );
   };
 
+  if (selectedLeave) {
+    return <LeaveDetails leave={selectedLeave} onBack={() => setSelectedLeave(null)} />;
+  }
+
   return (
     <div>
       <h4 className="mb-4 dashboard-toggle">Dashboard</h4>
@@ -255,7 +261,15 @@ const Dashboard = () => {
               ) : recentActivities.length > 0 ? (
                 <div className="activity-list">
                   {recentActivities.map((leave) => (
-                    <div key={leave.id} className="activity-item d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                    <div 
+                      key={leave.id} 
+                      className="activity-item d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom"
+                      onClick={() => {
+                        const fullLeave = leaves.find(l => l.id === leave.id) || leave;
+                        setSelectedLeave(fullLeave);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <div>
                         <div className="fw-semibold">{leave.leave_type || leave.type}</div>
                         <small className="text-muted">

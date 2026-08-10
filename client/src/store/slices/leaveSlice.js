@@ -4,7 +4,7 @@ import axios from 'axios';
 export const fetchLeaves = createAsyncThunk('leave/fetchLeaves', async (_, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.get('/api/leaves/my-leaves', {
+    const response = await axios.get('/api/leaves/leave-details', {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data.data;

@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Card, Badge, Button, Modal, Form } from 'react-bootstrap';
 import axios from 'axios';
 import DataTable from './common/DataTable';
+import LeaveDetails from './LeaveDetails';
 
 const ManageLeaves = () => {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedLeave, setSelectedLeave] = useState(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectLeaveId, setRejectLeaveId] = useState(null);
   const [rejectLeaveDays, setRejectLeaveDays] = useState(0);
@@ -129,6 +131,10 @@ const ManageLeaves = () => {
     },
   ];
 
+  if (selectedLeave) {
+    return <LeaveDetails leave={selectedLeave} onBack={() => setSelectedLeave(null)} />;
+  }
+
   return (
     <div>
       <h4 className="mb-4 dashboard-toggle">Manage Leave Requests</h4>
@@ -143,6 +149,9 @@ const ManageLeaves = () => {
               pagination
               paginationPerPage={10}
               paginationRowsPerPageOptions={[10, 20, 30]}
+              onRowClicked={(row) => setSelectedLeave(row)}
+              pointerOnHover
+              highlightOnHover
             />
           )}
         </Card.Body>
