@@ -15,6 +15,7 @@ import ManageLeaves from './components/ManageLeaves';
 import LeaveRecords from './components/LeaveRecords';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/theme.css';
+import LeaveDetails from './components/LeaveDetails';
 
 function App() {
   const { user } = useSelector((state) => state.auth);
@@ -32,7 +33,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
-        
+
         <Route
           path="/*"
           element={
@@ -44,6 +45,7 @@ function App() {
                   <div className="page-content">
                     <Routes>
                       <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/leave-details/:id" element={<LeaveDetails />} />
                       <Route path="/apply-leave" element={<ApplyLeave />} />
                       <Route path="/my-leaves" element={<MyLeaves />} />
                       <Route path="/attendance" element={<Attendance />} />

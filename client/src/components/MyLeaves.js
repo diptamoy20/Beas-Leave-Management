@@ -3,12 +3,13 @@ import { Card, Badge } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchLeaves } from '../store/slices/leaveSlice';
 import DataTable from './common/DataTable';
+import { useNavigate } from 'react-router-dom';
 import LeaveDetails from './LeaveDetails';
 
 const MyLeaves = () => {
   const dispatch = useDispatch();
   const { leaves, loading } = useSelector((state) => state.leave);
-  const [selectedLeave, setSelectedLeave] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     dispatch(fetchLeaves());
@@ -63,9 +64,7 @@ const MyLeaves = () => {
     },
   ];
 
-  if (selectedLeave) {
-    return <LeaveDetails leave={selectedLeave} onBack={() => setSelectedLeave(null)} />;
-  }
+
 
   return (
     <div>
@@ -81,7 +80,7 @@ const MyLeaves = () => {
               pagination
               paginationPerPage={10}
               paginationRowsPerPageOptions={[10, 20, 30]}
-              onRowClicked={(row) => setSelectedLeave(row)}
+              onRowClicked={(row) => navigate(`/leave-details/${row.id}`)}
               pointerOnHover
               highlightOnHover
             />

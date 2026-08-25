@@ -40,7 +40,7 @@ const sendLeaveApplicationEmail = async (managerEmail, managerName, employeeName
           <li><strong>Duration:</strong> ${no_of_days} day(s)</li>
           <li><strong>Reason:</strong> ${reason}</li>
         </ul>
-        <p>Please approve my leave ..THIK ACHHE ?</p>
+        <p>Please approve my leave ?</p>
         <br>
         <p>Best Regards,</p>
         <p>${employeeName}</p>

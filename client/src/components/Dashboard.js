@@ -6,14 +6,16 @@ import { balanceLeave, fetchLeaves } from '../store/slices/leaveSlice';
 import { fetchHolidays } from '../store/slices/holidaySlice';
 import { fetchDashboardData } from '../store/slices/dashboardSlice';
 import LeaveDetails from './LeaveDetails';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate()
   const { user } = useSelector((state) => state.auth);
   const { leaves, leaveBalance, loading: leavesLoading } = useSelector((state) => state.leave);
   const { holidays, loading: holidaysLoading } = useSelector((state) => state.holiday);
   const { data: dashboardData, loading: dashboardLoading } = useSelector((state) => state.dashboard);
-  const [selectedLeave, setSelectedLeave] = useState(null);
+
 
   useEffect(() => {
     dispatch(fetchLeaves());
@@ -222,8 +224,8 @@ const Dashboard = () => {
     );
   };
 
-  if (selectedLeave) {
-    return <LeaveDetails leave={selectedLeave} onBack={() => setSelectedLeave(null)} />;
+  const handleLeaveDetails = (id) => {
+    navigate(`/leave-details/${id}`);
   }
 
   return (
@@ -261,12 +263,12 @@ const Dashboard = () => {
               ) : recentActivities.length > 0 ? (
                 <div className="activity-list">
                   {recentActivities.map((leave) => (
-                    <div 
-                      key={leave.id} 
+                    <div
+                      key={leave.id}
                       className="activity-item d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom"
                       onClick={() => {
-                        const fullLeave = leaves.find(l => l.id === leave.id) || leave;
-                        setSelectedLeave(fullLeave);
+                        handleLeaveDetails(leave.id)
+                        // const fullLeave = leaves.find(l => l.id === leave.id) || leave;
                       }}
                       style={{ cursor: 'pointer' }}
                     >

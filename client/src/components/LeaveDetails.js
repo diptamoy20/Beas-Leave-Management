@@ -1,8 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { FiChevronLeft, FiCheck, FiClock, FiX } from 'react-icons/fi';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchLeaves } from '../store/slices/leaveSlice';
 import '../assets/css/LeaveDetails.css';
 
-const LeaveDetails = ({ leave, onBack }) => {
+const LeaveDetails = ({ leave: propLeave, onBack }) => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  
+  const { leaves, loading } = useSelector((state) => state.leave);
+  const [localLeave, setLocalLeave] = useState(null);
+
+  useEffect(() => {
+    if (propLeave) {
+      setLocalLeave(propLeave);
+    } else if (id) {
+      dispatch(fetchLeaves(id));
+    }
+  }, [id, propLeave, dispatch]);
+
+  useEffect(() => {
+    if (!propLeave && id && leaves && leaves.length > 0) {
+      const foundLeave = leaves.find(l => String(l.id) === String(id)) || leaves[0];
+      setLocalLeave(foundLeave);
+    }
+  }, [leaves, id, propLeave]);
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate(-1);
+    }
+  };
+
+  const leave = propLeave || localLeave;
+
+  if (loading && !leave) return <div className="text-center py-5">Loading...</div>;
   if (!leave) return null;
 
   const formatDate = (dateString) => {
@@ -32,13 +68,13 @@ const LeaveDetails = ({ leave, onBack }) => {
   };
 
   // Mock Request ID if not provided by backend
-  const requestId = `LR0${leave.id || Math.floor(Math.random() * 100)}`;
+  const requestId = leave.id;
   const days = leave.no_of_days || 0;
   const daysText = `${days} Day${days !== 1 ? 's' : ''}`;
 
   return (
     <div className="leave-details-container">
-      <div className="leave-details-header" onClick={onBack}>
+      <div className="leave-details-header" onClick={handleBack}>
         <FiChevronLeft size={24} />
         <span>Leave Detail</span>
       </div>

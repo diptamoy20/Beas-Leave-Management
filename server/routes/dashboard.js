@@ -23,13 +23,13 @@ router.get('/', auth, async (req, res) => {
       } else if (req.no_of_days > 1) {
         applicationType = `${req.no_of_days} Days Application`;
       }
-      
+
       // Convert dates to YYYY-MM-DD
       const fromDate = new Date(req.start_date).toISOString().split('T')[0];
       const toDate = new Date(req.end_date).toISOString().split('T')[0];
 
       return {
-        id: `LR${String(req.id).padStart(3, '0')}`,
+        id: req.id,
         type: req.leave_type,
         applicationType: applicationType,
         fromDate: fromDate,
@@ -44,13 +44,13 @@ router.get('/', auth, async (req, res) => {
       'SELECT * FROM leave_balance WHERE employee_id = ?',
       [empDbId] // Note: leave_balance seems to use internal id, but leaves.js uses employee_id. Let's check both or fallback
     );
-    
+
     // In leaves.js it uses req.user.employee_id for leave_balance! 
     const [balanceByEmpId] = await db.query(
       'SELECT * FROM leave_balance WHERE employee_id = ?',
       [employeeId]
     );
-    
+
     const balance = balanceByEmpId.length > 0 ? balanceByEmpId[0] : (balances.length > 0 ? balances[0] : null);
 
     // Mock summary data based on requested format, but populating dynamically if possible

@@ -162,12 +162,12 @@ async function initializeDatabase() {
     // Ensure earned_leave, quarterly_leave and restricted_leave columns exist in leave_balance for existing installs
     const [balanceColumns] = await connection.query("SHOW COLUMNS FROM leave_balance");
     const balanceColNames = balanceColumns.map(col => col.Field);
-    
+
     if (!balanceColNames.includes('earned_leave')) {
       await connection.query('ALTER TABLE leave_balance ADD COLUMN earned_leave INT DEFAULT 0');
       console.log('✅ Added leave_balance.earned_leave column');
     }
-    
+
     if (!balanceColNames.includes('quarterly_leave')) {
       await connection.query('ALTER TABLE leave_balance ADD COLUMN quarterly_leave INT DEFAULT 1');
       console.log('✅ Added leave_balance.quarterly_leave column');
@@ -181,12 +181,12 @@ async function initializeDatabase() {
     // Ensure duration and is_restricted columns exist in leave_requests
     const [requestColumns] = await connection.query("SHOW COLUMNS FROM leave_requests");
     const requestColNames = requestColumns.map(col => col.Field);
-    
+
     if (!requestColNames.includes('duration')) {
       await connection.query("ALTER TABLE leave_requests ADD COLUMN duration VARCHAR(50) DEFAULT 'Full Day'");
       console.log('✅ Added leave_requests.duration column');
     }
-    
+
     if (!requestColNames.includes('is_restricted')) {
       await connection.query('ALTER TABLE leave_requests ADD COLUMN is_restricted BOOLEAN DEFAULT FALSE');
       console.log('✅ Added leave_requests.is_restricted column');
@@ -204,8 +204,8 @@ async function initializeDatabase() {
         try {
           await connection.query('ALTER TABLE leave_requests DROP FOREIGN KEY fk_manager');
           console.log('✅ Dropped fk_manager');
-        } catch(e) {
-           // Ignore if it doesn't exist
+        } catch (e) {
+          // Ignore if it doesn't exist
         }
         await connection.query('ALTER TABLE leave_requests MODIFY manager_id VARCHAR(255)');
         console.log('✅ Modified leave_requests.manager_id to VARCHAR(255)');
@@ -238,8 +238,6 @@ async function initializeDatabase() {
       ('hr', 'Human Resources'),
       ('ceo', 'Chief Executive Officer')
     `);
-
-
     connection.release();
     console.log('Database tables initialized successfully');
   } catch (error) {

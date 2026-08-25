@@ -146,12 +146,22 @@ router.get('/apply-meta', auth, async (req, res) => {
 //   }
 // });
 
-router.get('/leave-details', auth, async (req, res) => {
+router.get('/leave-details/:id?', auth, async (req, res) => {
   try {
-    const [leaves] = await db.query(
-      `SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC`,
-      [req.user.employee_id]
-    );
+    let leaves = [];
+    if (req.params.id) {
+      const [rows] = await db.query(
+        `SELECT * FROM leave_requests WHERE id = ?`,
+        [req.params.id]
+      );
+      leaves = rows;
+    } else {
+      const [rows] = await db.query(
+        `SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC`,
+        [req.user.employee_id]
+      );
+      leaves = rows;
+    }
 
     const [balance] = await db.query(
       `SELECT earned_leave FROM leave_balance WHERE employee_id = ?`,
@@ -172,12 +182,12 @@ router.get('/leave-details', auth, async (req, res) => {
             managerIds
           );
 
-          const [approvals] = await db.query('SELECT manager_id, status FROM leave_approvals WHERE leave_id = ?', [leave.id]);
+          const [approvals] = await db.query('SELECT manager_id, status, updated_at  FROM leave_approvals WHERE leave_id = ?', [leave.id]);
 
           approvalDetails = managers.map(mgr => {
             const approvalRecord = approvals.find(a => String(a.manager_id) === String(mgr.employee_id));
             let managerStatus = approvalRecord ? approvalRecord.status : 'Pending';
-            
+
             // Fallback for old leaves without leave_approvals records
             if (!approvalRecord) {
               if (leave.status === 'Approved') managerStatus = 'Approved';
@@ -188,7 +198,8 @@ router.get('/leave-details', auth, async (req, res) => {
               manager_id: mgr.employee_id,
               manager_name: mgr.name,
               designation: mgr.designation,
-              status: managerStatus
+              status: managerStatus,
+              date: approvalRecord ? approvalRecord.updated_at : null,
             };
           });
         }
@@ -235,7 +246,7 @@ router.get('/all', auth, isManager, async (req, res) => {
       ,
       [approverEmployeeId, approverEmployeeId]
     );
-    
+
     leaves.forEach(leave => {
       if (leave.manager_status) {
         leave.global_status = leave.status;
@@ -276,10 +287,10 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
 
     // Check all approvals
     const [allApprovals] = await db.query('SELECT status FROM leave_approvals WHERE leave_id = ?', [id]);
-    
+
     let overallStatus = 'Pending';
     const hasRejected = allApprovals.some(a => a.status === 'Rejected');
-    
+
     // For older leaves that might not have all managers in leave_approvals yet
     // If it's the only manager we know about, we check if it's approved. 
     // Ideally, length should match managerIds.length.
