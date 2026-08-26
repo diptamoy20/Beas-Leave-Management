@@ -15,8 +15,11 @@ jobs:
           port: ${{ secrets.PORT }}
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
+          timeout: 60s
+          command_timeout: 10m
           script: |
             cd /root/Beas-Leave-Management
             git pull origin main
             npm install
+            npm run build
             pm2 restart all
