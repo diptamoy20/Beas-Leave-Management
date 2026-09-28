@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config();
+
+// Load .env from monorepo root (one level up from server/)
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const authRoutes = require('./routes/auth');
 const leaveRoutes = require('./routes/leaves');
@@ -9,7 +11,6 @@ const employeeRoutes = require('./routes/employees');
 const attendanceRoutes = require('./routes/attendance');
 const holidayRoutes = require('./routes/holidays');
 const dashboardRoutes = require('./routes/dashboard');
-
 
 const app = express();
 
@@ -23,12 +24,12 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-// Serve static files from React app in production
+// Serve static files from React build in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
-  
+  const clientBuild = path.join(__dirname, '../client/build');
+  app.use(express.static(clientBuild));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+    res.sendFile(path.join(clientBuild, 'index.html'));
   });
 }
 

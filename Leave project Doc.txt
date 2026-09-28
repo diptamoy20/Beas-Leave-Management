@@ -1,0 +1,29 @@
+Node project/                      ← Workspace ROOT
+├── package.json                   ← Workspace manager only
+│     workspaces: ["client", "server"]
+│     scripts: dev, start, build, seed-holidays
+│     devDeps: concurrently
+│
+├── node_modules/                  ← SHARED (hoisted) dependencies
+│
+├── client/                        ← Workspace: beas-lms-client
+│   ├── package.json               ← React deps only (react, redux, axios...)
+│   └── src/
+│
+└── server/                        ← Workspace: beas-lms-server  ← NEW
+    ├── package.json               ← Express deps only (express, mysql2, jwt...)
+    ├── index.js                   ← dotenv now loads from ../  (root)
+    ├── config/ routes/ middleware/
+    └── scripts/
+
+
+npm install	Installs all workspaces in one shot
+npm run dev	Runs both server (nodemon) + client (react-scripts) concurrently
+npm start	Production: starts Express server only
+npm run build	Builds React client for production
+npm run seed-holidays	Seeds holiday data
+
+
+Server: npm run dev --workspace=server (or from server/: npm run dev)
+Client: npm run dev --workspace=client (or from client/: npm start)
+Both at once: npm run dev (from root)

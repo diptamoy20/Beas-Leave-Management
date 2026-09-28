@@ -1,11 +1,28 @@
+# Root and workspace node_modules
 node_modules/
-.env
 client/node_modules/
+server/node_modules/
+
+# Build output
 client/build/
-.DS_Store
+
+# Environment secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
 *.log
-database/*.db
-database/*.db-journal
+npm-debug.log*
+
+# OS / Editor
+.DS_Store
 .vscode/
 .idea/
+
+# Legacy database files
+database/*.db
+database/*.db-journal
+
+# Private docs
 _DFD.pdf

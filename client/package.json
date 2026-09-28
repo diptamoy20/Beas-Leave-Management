@@ -1,9 +1,16 @@
 {
-  "name": "lms-client",
+  "name": "beas-lms-client",
   "version": "0.1.0",
   "private": true,
   "proxy": "http://localhost:5000",
   "homepage": ".",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "dev": "react-scripts start"
+  },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.2",
     "axios": "^1.5.0",
@@ -19,12 +26,6 @@
     "react-scripts": "5.0.1",
     "react-to-print": "^3.3.0",
     "xlsx": "^0.18.5"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [

@@ -1,9 +1,9 @@
 services:
-  # Full-stack application
   - type: web
     name: beas-leave-management
     env: node
-    buildCommand: npm install && cd client && npm install && cd .. && npm run build
+    # Single npm install at root installs all workspaces, then build client
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: PORT
