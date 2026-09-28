@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-export const fetchEmployees = createAsyncThunk('employees/fetchss', async (_, { rejectWithValue }) => {
+export const fetchEmployees = createAsyncThunk('employees/fetch', async (_, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
     const response = await axios.get('/api/employees', {
@@ -9,7 +9,7 @@ export const fetchEmployees = createAsyncThunk('employees/fetchss', async (_, { 
     });
     return response.data.data;
   } catch (error) {
-    return rejectWithValue(error.response?.data?.message || 'Failed to fetch leaves');
+    return rejectWithValue(error.response?.data?.message || 'Failed to fetch employees');
   }
 });
 

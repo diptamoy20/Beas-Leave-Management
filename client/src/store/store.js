@@ -11,9 +11,9 @@ export const store = configureStore({
     auth: authReducer,
     theme: themeReducer,
     leave: leaveReducer,
-    leaveBalance: leaveReducer,
     holiday: holidayReducer,
     employees: empReducer,
-    dashboard: dashboardReducer
+    dashboard: dashboardReducer,
   },
 });
+

@@ -1,15 +1,28 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-export const fetchLeaves = createAsyncThunk('leave/fetchLeaves', async (id = null, { rejectWithValue }) => {
+export const fetchLeaves = createAsyncThunk('leave/fetchLeaves', async (_, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.get(`${id ? `/api/leaves/leave-details/${id}` : '/api/leaves/leave-details'}`, {
+    const response = await axios.get('/api/leaves/leave-details', {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Failed to fetch leaves');
+  }
+});
+
+export const fetchLeaveDetail = createAsyncThunk('leave/fetchLeaveDetail', async (id, { rejectWithValue }) => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`/api/leaves/leave-details/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    // API returns { data: { leave: {...}, earned_leave: "..." } }
+    return response.data.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Failed to fetch leave detail');
   }
 });
 
@@ -41,14 +54,19 @@ const leaveSlice = createSlice({
   name: 'leave',
   initialState: {
     leaves: [],
+    leaveDetail: null,
     leaveBalance: null,
     leaveBalanceObject: null,
     loading: false,
+    detailLoading: false,
     error: null,
   },
   reducers: {
     clearError: (state) => {
       state.error = null;
+    },
+    clearLeaveDetail: (state) => {
+      state.leaveDetail = null;
     },
   },
   extraReducers: (builder) => {
@@ -63,6 +81,20 @@ const leaveSlice = createSlice({
       })
       .addCase(fetchLeaves.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchLeaveDetail.pending, (state) => {
+        state.detailLoading = true;
+        state.leaveDetail = null;
+      })
+      .addCase(fetchLeaveDetail.fulfilled, (state, action) => {
+        state.detailLoading = false;
+        // action.payload.leave is the single normalized leave object
+        state.leaveDetail = action.payload.leave;
+        state.leaveBalance = action.payload.earned_leave;
+      })
+      .addCase(fetchLeaveDetail.rejected, (state, action) => {
+        state.detailLoading = false;
         state.error = action.payload;
       })
       .addCase(applyLeave.pending, (state) => {
@@ -87,9 +119,9 @@ const leaveSlice = createSlice({
       .addCase(balanceLeave.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });;
+      });
   },
 });
 
-export const { clearError } = leaveSlice.actions;
+export const { clearError, clearLeaveDetail } = leaveSlice.actions;
 export default leaveSlice.reducer;

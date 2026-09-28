@@ -111,62 +111,101 @@ router.get('/apply-meta', auth, async (req, res) => {
   }
 });
 
-// router.get('/my-leaves', auth, async (req, res) => {
-//   try {
-//     const [leaves] = await db.query(
-//       'SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC',
-//       [req.user.employee_id]
-//     );
-//     res.json(leaves);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// });
-
-// router.get('/my-leaves', auth, async (req, res) => {
-//   try {
-
-//     const [leaves] = await db.query(
-//       'SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC',
-//       [req.user.employee_id]
-//     );
-
-//     const [balance] = await db.query(
-//       'SELECT earned_leave FROM leave_balance WHERE employee_id = ?',
-//       [req.user.employee_id]
-//     );
-
-//     res.json({
-//       leave_balance: balance[0]?.earned_leave || 0,
-//       leaves: leaves
-//     });
-
-//   } catch (error) {
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// });
-
 router.get('/leave-details/:id?', auth, async (req, res) => {
   try {
-    let leaves = [];
+    const [balance] = await db.query(
+      `SELECT earned_leave FROM leave_balance WHERE employee_id = ?`,
+      [req.user.employee_id]
+    );
+
+    // --- Single leave detail (by ID) ---
     if (req.params.id) {
       const [rows] = await db.query(
         `SELECT * FROM leave_requests WHERE id = ?`,
         [req.params.id]
       );
-      leaves = rows;
-    } else {
-      const [rows] = await db.query(
-        `SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC`,
-        [req.user.employee_id]
-      );
-      leaves = rows;
+
+      if (rows.length === 0) {
+        return res.status(404).json({ success: "false", message: 'Leave not found' });
+      }
+
+      const leave = rows[0];
+      let approvals = [];
+
+      if (leave.manager_id) {
+        const managerIds = String(leave.manager_id).split(',').map(id => id.trim()).filter(id => id);
+
+        if (managerIds.length > 0) {
+          const placeholders = managerIds.map(() => '?').join(',');
+          const [managers] = await db.query(
+            `SELECT employee_id, name, designation FROM employees WHERE employee_id IN (${placeholders})`,
+            managerIds
+          );
+
+          const [approvalRows] = await db.query(
+            'SELECT manager_id, status, updated_at FROM leave_approvals WHERE leave_id = ?',
+            [leave.id]
+          );
+
+          approvals = managers.map((mgr, idx) => {
+            const approvalRecord = approvalRows.find(a => String(a.manager_id) === String(mgr.employee_id));
+            let managerStatus = approvalRecord ? approvalRecord.status : 'Pending';
+
+            // Fallback for old leaves without leave_approvals records
+            if (!approvalRecord) {
+              if (leave.status === 'Approved') managerStatus = 'Approved';
+              else if (leave.status === 'Rejected') managerStatus = 'Rejected';
+            }
+
+            let approvalDate = '';
+            if (approvalRecord && approvalRecord.updated_at) {
+              const d = new Date(approvalRecord.updated_at);
+              approvalDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            }
+
+            return {
+              id: idx + 1,
+              name: mgr.name,
+              designation: mgr.designation || 'Manager',
+              status: managerStatus,
+              date: approvalDate,
+            };
+          });
+        }
+      }
+
+      const formatDate = (dateStr) => dateStr ? new Date(dateStr).toISOString().split('T')[0] : null;
+
+      const leaveDetail = {
+        id: leave.id,
+        leaveType: leave.leave_type,
+        applicationType: leave.duration || 'Full Day',
+        status: leave.status,
+        fromDate: formatDate(leave.start_date),
+        toDate: formatDate(leave.end_date),
+        appliedOn: formatDate(leave.created_at),
+        totalDays: leave.no_of_days,
+        reason: leave.reason,
+        rejectionReason: leave.rejection_reason || null,
+        approvals,
+      };
+
+      return res.json({
+        success: "true",
+        message: "Leave fetched successfully",
+        data: {
+          leave: leaveDetail,
+          earned_leave: balance[0]?.earned_leave ?? 0,
+        }
+      });
     }
 
-    const [balance] = await db.query(
-      `SELECT earned_leave FROM leave_balance WHERE employee_id = ?`,
+    // --- List of leaves (no ID) ---
+    const [rows] = await db.query(
+      `SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC`,
       [req.user.employee_id]
     );
+    const leaves = rows;
 
     for (let i = 0; i < leaves.length; i++) {
       const leave = leaves[i];
@@ -182,13 +221,15 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
             managerIds
           );
 
-          const [approvals] = await db.query('SELECT manager_id, status, updated_at  FROM leave_approvals WHERE leave_id = ?', [leave.id]);
+          const [approvalRows] = await db.query(
+            'SELECT manager_id, status, updated_at FROM leave_approvals WHERE leave_id = ?',
+            [leave.id]
+          );
 
           approvalDetails = managers.map(mgr => {
-            const approvalRecord = approvals.find(a => String(a.manager_id) === String(mgr.employee_id));
+            const approvalRecord = approvalRows.find(a => String(a.manager_id) === String(mgr.employee_id));
             let managerStatus = approvalRecord ? approvalRecord.status : 'Pending';
 
-            // Fallback for old leaves without leave_approvals records
             if (!approvalRecord) {
               if (leave.status === 'Approved') managerStatus = 'Approved';
               else if (leave.status === 'Rejected') managerStatus = 'Rejected';

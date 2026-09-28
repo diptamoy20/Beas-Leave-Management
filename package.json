@@ -11,8 +11,7 @@
     "build-client": "cd client && npm run build",
     "build": "npm run install-client && npm run build-client",
     "start": "node server/index.js",
-    "seed-holidays": "node server/seedHolidays.js",
-    "view-db": "node viewDatabase.js"
+    "seed-holidays": "node server/scripts/seedHolidays.js"
   },
   "keywords": [
     "leave",
@@ -32,7 +31,6 @@
     "mysql2": "^3.19.1",
     "nodemailer": "^9.0.4",
     "react-datepicker": "^9.1.0",
-    "sqlite3": "^5.1.6",
     "xlsx": "^0.18.5",
     "zk-attendance-sdk": "^2.1.0"
   },

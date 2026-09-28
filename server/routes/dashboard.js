@@ -54,9 +54,9 @@ router.get('/', auth, async (req, res) => {
     const balance = balanceByEmpId.length > 0 ? balanceByEmpId[0] : (balances.length > 0 ? balances[0] : null);
 
     // Mock summary data based on requested format, but populating dynamically if possible
-    const totalLeave = (balance?.casual_leave || 12) + (balance?.sick_leave || 10) + (balance?.paid_leave || 15);
-    const balanceLeave = balance?.earned_leave || 14; // Default to 14 if earned_leave doesn't exist yet
-    const earlyLeave = balance?.quarterly_leave !== undefined ? balance.quarterly_leave : 3; // Fallback to 3 if undefined
+    const totalLeave = Number(balance?.earned_leave || 12) + Number(balance?.quarterly_leave || 15);
+    const balanceLeave = Number(balance?.earned_leave || 14); // Default to 14 if earned_leave doesn't exist yet
+    const earlyLeave = Number(balance?.quarterly_leave !== undefined ? balance.quarterly_leave : 3); // Fallback to 3 if undefined
 
     const leaveRequestByEmployee = requests.length;
 
