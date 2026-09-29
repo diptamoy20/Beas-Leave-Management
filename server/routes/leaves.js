@@ -1,9 +1,19 @@
 const express = require('express');
 const db = require('../config/db');
 const { auth, isManager, isAdmin } = require('../middleware/auth');
-const { sendLeaveApplicationEmail } = require('../utils/email');
+// const { sendLeaveApplicationEmail } = require('../utils/email');
 
 const router = express.Router();
+
+const toLocalYMD = (d) => {
+  if (!d) return null;
+  const date = new Date(d);
+  if (isNaN(date)) return d;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 router.post('/apply', auth, async (req, res) => {
   try {
@@ -33,21 +43,21 @@ router.post('/apply', auth, async (req, res) => {
         const [managerRows] = await db.query('SELECT name, email FROM employees WHERE FIND_IN_SET(employee_id, ?) > 0', [manager_id]);
         const [employeeRows] = await db.query('SELECT name, email FROM employees WHERE employee_id = ?', [employee_id]);
 
-        if (managerRows.length > 0 && employeeRows.length > 0) {
-          const employee = employeeRows[0];
+        // if (managerRows.length > 0 && employeeRows.length > 0) {
+        //   const employee = employeeRows[0];
 
-          for (const manager of managerRows) {
-            if (manager.email) {
-              await sendLeaveApplicationEmail(
-                manager.email,
-                manager.name,
-                employee.name,
-                employee.email,
-                { leave_type, start_date, end_date, no_of_days, reason, duration, is_restricted }
-              );
-            }
-          }
-        }
+        //   for (const manager of managerRows) {
+        //     if (manager.email) {
+        //       await sendLeaveApplicationEmail(
+        //         manager.email,
+        //         manager.name,
+        //         employee.name,
+        //         employee.email,
+        //         { leave_type, start_date, end_date, no_of_days, reason, duration, is_restricted }
+        //       );
+        //     }
+        //   }
+        // }
       } catch (emailError) {
         console.error('Failed to send leave application email:', emailError);
         // Continue with the success response even if email fails
@@ -72,9 +82,10 @@ router.get('/apply-meta', auth, async (req, res) => {
     );
     const b = balance[0] || {};
 
-    const totalLeave = String(b.earned_leave || 0);
-    const balanceLeave = String((b.casual_leave || 0) + (b.sick_leave || 0) + (b.paid_leave || 0) + (b.earned_leave || 0));
-    const restrictedLieve = String(b.restricted_leave ?? 1);
+    const totalLeave = Number(b.earned_leave || 0);
+    const balanceLeave = Number((b.casual_leave || 0) + (b.sick_leave || 0) + (b.paid_leave || 0) + (b.earned_leave || 0));
+    const restrictedLeave = Number(b.restricted_leave ?? 1);
+    const quarterlyLeave = Number(b.quarterly_leave || 0);
 
     // 2. Fetch holidays
     const [holidays] = await db.query(
@@ -92,18 +103,32 @@ router.get('/apply-meta', auth, async (req, res) => {
     });
 
     // 3. Fetch authorities
-    let query = "SELECT id, name, designation, employee_id FROM employees WHERE role = 'manager' OR role = 'admin'";
-    const [authorities] = await db.query(query);
+    let query = "SELECT id, name, designation, employee_id FROM employees WHERE (role = 'manager' OR role = 'admin') AND employee_id != ?";
+    const [authorities] = await db.query(query, [employee_id]);
+
+    // 4. Fetch existing leaves (to block dates)
+    const [existingLeaves] = await db.query(
+      'SELECT start_date, end_date FROM leave_requests WHERE employee_id = ? AND status != "Rejected"',
+      [employee_id]
+    );
+    const formattedLeaves = existingLeaves.map(l => ({
+      from_date: toLocalYMD(l.start_date),
+      to_date: toLocalYMD(l.end_date)
+    }));
 
     res.json({
       success: "true",
-      message: "Data fetch successfully",
+      message: "Leave fetched successfully",
       data: {
-        totalLeave,
-        "balance Leave": balanceLeave,
-        "restrictedLieve": restrictedLieve,
+        leaveBalance: {
+          totalLeave,
+          balanceLeave,
+          restrictedLeave,
+          quarterlyLeave
+        },
         holidays: formattedHolidays,
-        authorities
+        authorities,
+        leave: formattedLeaves
       }
     });
   } catch (error) {
@@ -174,7 +199,7 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
         }
       }
 
-      const formatDate = (dateStr) => dateStr ? new Date(dateStr).toISOString().split('T')[0] : null;
+      const formatDate = (dateStr) => toLocalYMD(dateStr);
 
       const leaveDetail = {
         id: leave.id,
@@ -201,10 +226,18 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
     }
 
     // --- List of leaves (no ID) ---
-    const [rows] = await db.query(
-      `SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC`,
-      [req.user.employee_id]
-    );
+    let queryStr = `SELECT * FROM leave_requests WHERE employee_id = ?`;
+    const queryParams = [req.user.employee_id];
+
+    if (req.query.search) {
+      queryStr += ` AND (leave_type LIKE ? OR status LIKE ? OR reason LIKE ?)`;
+      const searchPattern = `%${req.query.search}%`;
+      queryParams.push(searchPattern, searchPattern, searchPattern);
+    }
+    
+    queryStr += ` ORDER BY created_at DESC`;
+
+    const [rows] = await db.query(queryStr, queryParams);
     const leaves = rows;
 
     for (let i = 0; i < leaves.length; i++) {
@@ -246,6 +279,8 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
         }
       }
 
+      leaves[i].start_date = toLocalYMD(leave.start_date);
+      leaves[i].end_date = toLocalYMD(leave.end_date);
       leaves[i].approvalDetails = approvalDetails;
     }
 
@@ -277,25 +312,46 @@ router.get('/balance', auth, async (req, res) => {
 router.get('/all', auth, isManager, async (req, res) => {
   try {
     const approverEmployeeId = req.user.employee_id;
-    const [leaves] = await db.query(
-      `SELECT lr.*, e.name as employee_name, e.designation, la.status as manager_status
+    const [balance] = await db.query(
+      `SELECT earned_leave FROM leave_balance WHERE employee_id = ?`,
+      [approverEmployeeId]
+    );
+
+    let queryStr = `SELECT lr.*, e.name as employee_name, e.designation, la.status as manager_status
        FROM leave_requests lr 
        JOIN employees e ON lr.employee_id = e.employee_id 
        LEFT JOIN leave_approvals la ON lr.id = la.leave_id AND la.manager_id = ?
-       WHERE FIND_IN_SET(?, lr.manager_id) > 0
-       ORDER BY lr.created_at DESC`
-      ,
-      [approverEmployeeId, approverEmployeeId]
-    );
+       WHERE FIND_IN_SET(?, lr.manager_id) > 0`;
+       
+    const queryParams = [approverEmployeeId, approverEmployeeId];
+
+    if (req.query.search) {
+      queryStr += ` AND (e.name LIKE ? OR lr.leave_type LIKE ? OR lr.status LIKE ? OR la.status LIKE ? OR lr.reason LIKE ?)`;
+      const searchPattern = `%${req.query.search}%`;
+      queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    queryStr += ` ORDER BY lr.created_at DESC`;
+
+    const [leaves] = await db.query(queryStr, queryParams);
 
     leaves.forEach(leave => {
+      leave.start_date = toLocalYMD(leave.start_date);
+      leave.end_date = toLocalYMD(leave.end_date);
       if (leave.manager_status) {
         leave.global_status = leave.status;
         leave.status = leave.manager_status;
       }
     });
 
-    res.json({ success: "true", message: "All leaves fetched successfully", data: leaves });
+    res.json({ 
+      success: "true", 
+      message: "Leaves fetched successfully", 
+      data: { 
+        leaves, 
+        earned_leave: balance[0]?.earned_leave ?? 0 
+      } 
+    });
   } catch (error) {
     res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
@@ -380,6 +436,11 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
 
 router.get('/approved', auth, isAdmin, async (req, res) => {
   try {
+    const [balance] = await db.query(
+      `SELECT earned_leave FROM leave_balance WHERE employee_id = ?`,
+      [req.user.employee_id]
+    );
+
     const [leaves] = await db.query(
       `SELECT lr.*, e.name as employee_name, e.employee_id as emp_id, e.designation
        FROM leave_requests lr
@@ -387,7 +448,18 @@ router.get('/approved', auth, isAdmin, async (req, res) => {
        WHERE lr.status = 'Approved'
        ORDER BY lr.created_at DESC`
     );
-    res.json({ success: "true", message: "Approved leaves fetched successfully", data: leaves });
+    leaves.forEach(leave => {
+      leave.start_date = toLocalYMD(leave.start_date);
+      leave.end_date = toLocalYMD(leave.end_date);
+    });
+    res.json({ 
+      success: "true", 
+      message: "Leaves fetched successfully", 
+      data: { 
+        leaves, 
+        earned_leave: balance[0]?.earned_leave ?? 0 
+      } 
+    });
   } catch (error) {
     res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }

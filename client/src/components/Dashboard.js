@@ -5,7 +5,6 @@ import { FiCalendar, FiCheckCircle, FiClock, FiTrendingUp } from 'react-icons/fi
 import { balanceLeave, fetchLeaves } from '../store/slices/leaveSlice';
 import { fetchHolidays } from '../store/slices/holidaySlice';
 import { fetchDashboardData } from '../store/slices/dashboardSlice';
-import LeaveDetails from './LeaveDetails';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
@@ -127,11 +126,7 @@ const Dashboard = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    return new Date(dateString).toLocaleDateString('en-GB').replace(/\//g, '-');
   };
 
   // Simple SVG Pie Chart Component

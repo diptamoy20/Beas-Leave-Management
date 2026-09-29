@@ -1,10 +1,19 @@
 const express = require('express');
 const multer = require('multer');
-const xlsx = require('xlsx');
 const db = require('../config/db');
 const { auth, isManager } = require('../middleware/auth');
 
 const router = express.Router();
+
+const toLocalYMD = (d) => {
+  if (!d) return null;
+  const date = new Date(d);
+  if (isNaN(date)) return d;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 // Configure multer for file upload
 const storage = multer.memoryStorage();
@@ -40,6 +49,10 @@ router.get('/', auth, async (req, res) => {
     const totalLeave = (balance?.casual_leave || 12) + (balance?.sick_leave || 10) + (balance?.paid_leave || 15);
     const balanceLeave = balance?.earned_leave || 14; 
     const earlyLeave = balance?.quarterly_leave !== undefined ? balance.quarterly_leave : 3;
+
+    holidays.forEach(h => {
+      h.date = toLocalYMD(h.date);
+    });
 
     res.json({
       success: "true",

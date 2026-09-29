@@ -4,6 +4,16 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
+const toLocalYMD = (d) => {
+  if (!d) return null;
+  const date = new Date(d);
+  if (isNaN(date)) return d;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 router.get('/', auth, async (req, res) => {
   try {
     const employeeId = req.user.employee_id;
@@ -24,9 +34,9 @@ router.get('/', auth, async (req, res) => {
         applicationType = `${req.no_of_days} Days Application`;
       }
 
-      // Convert dates to YYYY-MM-DD
-      const fromDate = new Date(req.start_date).toISOString().split('T')[0];
-      const toDate = new Date(req.end_date).toISOString().split('T')[0];
+      // Convert dates to YYYY-MM-DD local
+      const fromDate = toLocalYMD(req.start_date);
+      const toDate = toLocalYMD(req.end_date);
 
       return {
         id: req.id,

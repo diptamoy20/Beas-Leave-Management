@@ -208,7 +208,7 @@ router.get('/my-attendance', auth, async (req, res) => {
         const hl = holidayMap.get(key) || null;
 
         const row = {
-          date: att ? att.date : key,
+          date: att ? toDateOnlyString(att.date) : key,
           employee_id: employeeId,
           employee_name: empRows.length ? empRows[0].name : '',
           clock_in: att ? att.clock_in : null,
@@ -257,6 +257,9 @@ router.get('/my-attendance', auth, async (req, res) => {
        ORDER BY a.date DESC`,
       [employeeId]
     );
+    attendance.forEach(a => {
+      a.date = toDateOnlyString(a.date);
+    });
     res.json({ success: "true", message: "Attendance fetched", data: attendance });
   } catch (error) {
     res.status(500).json({ success: "false", message: 'Server error' });

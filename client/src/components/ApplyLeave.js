@@ -101,7 +101,11 @@ const ApplyLeave = () => {
 
   const toYmd = (d) => {
     if (!d) return '';
-    return new Date(d).toISOString().slice(0, 10);
+    const date = new Date(d);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const generalHolidayDates = useMemo(() => {
@@ -152,7 +156,7 @@ const ApplyLeave = () => {
 
     while (current <= end) {
       const day = current.getDay();
-      const dateStr = current.toISOString().split('T')[0];
+      const dateStr = toYmd(current);
       const isWeekend = day === 0 || day === 6;
       const isRestricted = restrictedDates.has(dateStr);
 

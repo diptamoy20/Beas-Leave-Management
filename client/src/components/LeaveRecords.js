@@ -15,7 +15,7 @@ const LeaveRecords = () => {
         const response = await axios.get('/api/leaves/approved', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setLeaves(response.data.data);
+        setLeaves(response.data.data.leaves);
       } catch (error) {
         console.error('Error fetching approved leaves:', error);
       } finally {

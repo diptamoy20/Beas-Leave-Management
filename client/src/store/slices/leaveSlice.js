@@ -1,11 +1,15 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-export const fetchLeaves = createAsyncThunk('leave/fetchLeaves', async (_, { rejectWithValue }) => {
+export const fetchLeaves = createAsyncThunk('leave/fetchLeaves', async (search = '', { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
+    const params = {};
+    if (search) params.search = search;
+
     const response = await axios.get('/api/leaves/leave-details', {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      params
     });
     return response.data.data;
   } catch (error) {

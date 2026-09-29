@@ -17,7 +17,18 @@
   "devDependencies": {
     "concurrently": "^8.2.0"
   },
-  "keywords": ["leave", "management", "hr"],
+  "overrides": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "keywords": [
+    "leave",
+    "management",
+    "hr"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "ssh2-promise": "^1.0.3"
+  }
 }

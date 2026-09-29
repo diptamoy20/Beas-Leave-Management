@@ -12,18 +12,27 @@ const ManageLeaves = () => {
   const [rejectLeaveId, setRejectLeaveId] = useState(null);
   const [rejectLeaveDays, setRejectLeaveDays] = useState(0);
   const [rejectReason, setRejectReason] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchAllLeaves();
-  }, []);
+    const delayDebounceFn = setTimeout(() => {
+      fetchAllLeaves(searchTerm);
+    }, 500);
 
-  const fetchAllLeaves = async () => {
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
+  const fetchAllLeaves = async (search = '') => {
     try {
       const token = localStorage.getItem('token');
+      const params = {};
+      if (search) params.search = search;
+      
       const response = await axios.get('/api/leaves/all', {
         headers: { Authorization: `Bearer ${token}` },
+        params
       });
-      setLeaves(response.data.data);
+      setLeaves(response.data.data.leaves);
     } catch (error) {
       console.error('Error fetching leaves:', error);
     } finally {
@@ -135,11 +144,21 @@ const ManageLeaves = () => {
     return <LeaveDetails leave={selectedLeave} onBack={() => setSelectedLeave(null)} />;
   }
 
-  return (
-    <div>
-      <h4 className="mb-4 dashboard-toggle">Manage Leave Requests</h4>
-      <Card className="dashboard-card">
-        <Card.Body>
+    return (
+      <div>
+        <div className="d-flex justify-content-between align-items-center mb-4 dashboard-toggle">
+          <h4>Manage Leave Requests</h4>
+          <Form.Group className="mb-0" style={{ width: '250px' }}>
+            <Form.Control
+              type="text"
+              placeholder="Search leaves..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </Form.Group>
+        </div>
+        <Card className="dashboard-card">
+          <Card.Body>
           {loading ? (
             <div className="text-center py-5">Loading...</div>
           ) : (

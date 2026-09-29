@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { FiChevronLeft, FiCheck, FiClock, FiX } from 'react-icons/fi';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -50,7 +50,7 @@ const LeaveDetails = ({ leave: propLeave, onBack }) => {
         designation: a.designation || 'Manager',
         status: a.status,
         date: a.date
-          ? new Date(a.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          ? new Date(a.date).toLocaleDateString('en-GB').replace(/\//g, '-')
           : '',
       })),
     };
@@ -64,8 +64,9 @@ const LeaveDetails = ({ leave: propLeave, onBack }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+    const d = new Date(dateString);
+    if (isNaN(d)) return dateString;
+    return d.toLocaleDateString('en-GB').replace(/\//g, '-'); // Outputs DD-MM-YYYY
   };
 
   const getStatusClass = (status) => {

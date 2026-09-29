@@ -30,7 +30,7 @@ const sendLeaveApplicationEmail = async (managerEmail, managerName, employeeName
       to: managerEmail,
       subject: `New Leave Request from ${employeeName}`,
       html: `
-        <h3>Leave Request Notification</h3>
+        <h3>This is HR Leave application project test mail , Please ignore</h3>
         <p>Dear ${managerName} sir,</p>
         <p><strong>${employeeName}</strong> has applied for a leave. Please find the details below:</p>
         <ul>

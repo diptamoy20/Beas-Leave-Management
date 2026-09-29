@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Badge } from 'react-bootstrap';
+import { Card, Badge, Form } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchLeaves } from '../store/slices/leaveSlice';
 import DataTable from './common/DataTable';
@@ -11,9 +11,15 @@ const MyLeaves = () => {
   const { leaves, loading } = useSelector((state) => state.leave);
   const navigate = useNavigate();
 
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
-    dispatch(fetchLeaves());
-  }, [dispatch]);
+    const delayDebounceFn = setTimeout(() => {
+      dispatch(fetchLeaves(searchTerm));
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [dispatch, searchTerm]);
 
   const getStatusBadge = (status) => {
     const variants = {
@@ -68,7 +74,17 @@ const MyLeaves = () => {
 
   return (
     <div>
-      <h4 className="mb-4 dashboard-toggle">My Leave Requests</h4>
+      <div className="d-flex justify-content-between align-items-center mb-4 dashboard-toggle">
+        <h4>My Leave Requests</h4>
+        <Form.Group className="mb-0" style={{ width: '250px' }}>
+          <Form.Control
+            type="text"
+            placeholder="Search leaves..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </Form.Group>
+      </div>
       <Card className="dashboard-card">
         <Card.Body>
           {loading ? (
