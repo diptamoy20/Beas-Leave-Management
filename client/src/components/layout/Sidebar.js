@@ -1,13 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { 
-  FiHome, 
-  FiCalendar, 
-  FiFileText, 
-  FiClock, 
-  FiUsers, 
-  FiCheckSquare 
+import {
+  FiHome,
+  FiCalendar,
+  FiFileText,
+  FiClock,
+  FiUsers,
+  FiCheckSquare
 } from 'react-icons/fi';
 
 const Sidebar = () => {
@@ -23,7 +23,7 @@ const Sidebar = () => {
     // { path: '/leave-balance', icon: <FiCheckSquare />, label: 'Leave Balance' },
   ];
 
-  if (user?.role === 'manager' 
+  if (user?.role === 'manager'
     // || user?.role === 'admin'
   ) {
     menuItems.push(
@@ -36,9 +36,9 @@ const Sidebar = () => {
 
   if (user?.role === 'admin') {
     menuItems.push(
-      { path: '/leave-records', icon: <FiCheckSquare />, label: 'Leave History' }
+      { path: '/leave-records', icon: <FiCheckSquare />, label: 'Employees Leave' }
     );
-      menuItems.push(
+    menuItems.push(
       { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance' }
     );
   }
@@ -48,9 +48,9 @@ const Sidebar = () => {
       <div className="sidebar-header">
         <NavLink to="/dashboard" className="sidebar-logo">
           {sidebarExpanded ? (
-            <img 
-              src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png" 
-              alt="BEAS Consultancy" 
+            <img
+              src="https://api.beasconsultancy.com/assets/img/logo/1765541148_image.png"
+              alt="BEAS Consultancy"
               className="sidebar-logo-img"
             />
           ) : (
