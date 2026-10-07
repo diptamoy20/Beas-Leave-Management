@@ -1,0 +1,467 @@
+/* ===== Employee Leave History (LeaveRecords for Admin) ===== */
+
+.elh-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* Back header */
+.elh-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--primary-deep);
+  margin-bottom: 20px;
+  padding: 6px 0;
+  transition: color 0.2s ease;
+}
+
+.elh-header:hover {
+  color: var(--secondary-color);
+}
+
+.dark-mode .elh-header {
+  color: var(--dark-text);
+}
+
+.dark-mode .elh-header:hover {
+  color: #9dc9d3;
+}
+
+/* Search */
+.elh-search-wrapper {
+  margin-bottom: 20px;
+}
+
+.elh-search-input-group {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--light-border);
+  background: var(--light-surface);
+  box-shadow: 0 6px 20px rgba(23, 43, 54, 0.05);
+  transition: box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+.elh-search-input-group:focus-within {
+  border-color: rgba(47, 127, 143, 0.5);
+  box-shadow: 0 8px 24px rgba(47, 127, 143, 0.1);
+}
+
+.elh-search-icon {
+  background: transparent !important;
+  border: none !important;
+  color: var(--light-muted);
+  padding-left: 18px;
+  font-size: 1.1rem;
+}
+
+.elh-search-input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-left: 8px;
+  font-size: 0.95rem;
+}
+
+.elh-search-input:focus {
+  box-shadow: none !important;
+}
+
+.dark-mode .elh-search-input-group {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+.dark-mode .elh-search-icon {
+  color: var(--dark-muted);
+}
+
+.dark-mode .elh-search-input {
+  color: var(--dark-text);
+}
+
+/* Employee List */
+.elh-employee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.elh-employee-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--light-surface);
+  border: 1px solid var(--light-border);
+  box-shadow: 0 8px 24px rgba(23, 43, 54, 0.05);
+  cursor: pointer;
+  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+.elh-employee-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(23, 43, 54, 0.1);
+  border-color: rgba(47, 127, 143, 0.3);
+}
+
+.elh-employee-card:active {
+  transform: scale(0.99);
+}
+
+.dark-mode .elh-employee-card {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: var(--dark-shadow);
+}
+
+.dark-mode .elh-employee-card:hover {
+  border-color: rgba(150, 194, 206, 0.3);
+}
+
+.elh-employee-avatar {
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.elh-employee-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.elh-employee-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary-deep);
+  margin-bottom: 2px;
+}
+
+.dark-mode .elh-employee-name {
+  color: var(--dark-text);
+}
+
+.elh-employee-designation {
+  font-size: 0.85rem;
+  color: var(--light-muted);
+  margin-bottom: 2px;
+}
+
+.dark-mode .elh-employee-designation {
+  color: var(--dark-muted);
+}
+
+.elh-employee-id {
+  font-size: 0.82rem;
+  color: var(--secondary-color);
+  font-weight: 600;
+}
+
+.elh-employee-arrow {
+  color: var(--light-muted);
+  transition: transform 0.2s ease;
+}
+
+.elh-employee-card:hover .elh-employee-arrow {
+  transform: translateX(4px);
+  color: var(--secondary-color);
+}
+
+.dark-mode .elh-employee-arrow {
+  color: var(--dark-muted);
+}
+
+/* Employee Info Card (in history view) */
+.elh-emp-info-card {
+  border-radius: 20px !important;
+  margin-bottom: 16px;
+  border: 1px solid var(--light-border) !important;
+  background: var(--light-surface) !important;
+  box-shadow: 0 8px 24px rgba(23, 43, 54, 0.06);
+}
+
+.dark-mode .elh-emp-info-card {
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
+}
+
+.elh-emp-info-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary-deep);
+  margin-bottom: 4px;
+}
+
+.dark-mode .elh-emp-info-name {
+  color: var(--dark-text);
+}
+
+.elh-emp-info-id {
+  font-size: 0.88rem;
+  color: var(--light-muted);
+  margin-bottom: 2px;
+}
+
+.dark-mode .elh-emp-info-id {
+  color: var(--dark-muted);
+}
+
+.elh-emp-info-designation {
+  font-size: 0.88rem;
+  color: var(--secondary-color);
+  font-weight: 500;
+}
+
+/* Leave Summary Row */
+.elh-summary-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.elh-summary-card {
+  flex: 1;
+  padding: 14px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--light-border);
+  background: var(--light-surface);
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(23, 43, 54, 0.04);
+  transition: transform 0.2s ease;
+}
+
+.elh-summary-card:hover {
+  transform: translateY(-2px);
+}
+
+.dark-mode .elh-summary-card {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+.elh-summary-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--light-muted);
+  margin-bottom: 6px;
+}
+
+.dark-mode .elh-summary-label {
+  color: var(--dark-muted);
+}
+
+.elh-summary-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* Filter Tabs */
+.elh-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(31, 78, 95, 0.06);
+  border: 1px solid var(--light-border);
+}
+
+.dark-mode .elh-tabs {
+  background: rgba(150, 194, 206, 0.06);
+  border-color: var(--dark-border);
+}
+
+.elh-tab {
+  flex: 1;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: var(--light-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.elh-tab:hover {
+  color: var(--primary-deep);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.dark-mode .elh-tab {
+  color: var(--dark-muted);
+}
+
+.dark-mode .elh-tab:hover {
+  color: var(--dark-text);
+  background: rgba(150, 194, 206, 0.1);
+}
+
+.elh-tab-active {
+  color: var(--primary-deep) !important;
+  background: #fff !important;
+  box-shadow: 0 4px 12px rgba(23, 43, 54, 0.08);
+}
+
+.dark-mode .elh-tab-active {
+  color: var(--dark-text) !important;
+  background: var(--dark-surface-strong) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Leaves List */
+.elh-leaves-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.elh-month-group {
+  margin-bottom: 8px;
+}
+
+.elh-month-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--light-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  padding-left: 4px;
+}
+
+.dark-mode .elh-month-label {
+  color: var(--dark-muted);
+}
+
+/* Leave Card */
+.elh-leave-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--light-border);
+  background: var(--light-surface);
+  box-shadow: 0 6px 18px rgba(23, 43, 54, 0.04);
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.elh-leave-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(23, 43, 54, 0.08);
+  border-color: rgba(47, 127, 143, 0.25);
+}
+
+.elh-leave-card:active {
+  transform: scale(0.99);
+}
+
+.dark-mode .elh-leave-card {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+.dark-mode .elh-leave-card:hover {
+  border-color: rgba(150, 194, 206, 0.25);
+}
+
+.elh-leave-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.elh-leave-app-type {
+  font-size: 0.85rem;
+  color: var(--light-muted);
+  font-weight: 500;
+}
+
+.dark-mode .elh-leave-app-type {
+  color: var(--dark-muted);
+}
+
+.elh-leave-status-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 10px;
+  letter-spacing: 0.02em;
+}
+
+.elh-leave-date {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary-deep);
+  margin-bottom: 8px;
+}
+
+.dark-mode .elh-leave-date {
+  color: var(--dark-text);
+}
+
+.elh-leave-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.elh-leave-type {
+  font-size: 0.88rem;
+  color: var(--secondary-color);
+  font-weight: 600;
+}
+
+.elh-leave-arrow {
+  color: var(--light-muted);
+  transition: transform 0.2s ease;
+}
+
+.elh-leave-card:hover .elh-leave-arrow {
+  transform: translateX(4px);
+  color: var(--secondary-color);
+}
+
+.dark-mode .elh-leave-arrow {
+  color: var(--dark-muted);
+}
+
+/* Responsive */
+@media (max-width: 575.98px) {
+  .elh-summary-row {
+    gap: 8px;
+  }
+
+  .elh-summary-card {
+    padding: 10px 8px;
+  }
+
+  .elh-summary-value {
+    font-size: 1.3rem;
+  }
+
+  .elh-employee-card {
+    padding: 14px 16px;
+  }
+
+  .elh-leave-card {
+    padding: 14px 14px;
+  }
+}

@@ -434,31 +434,74 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
   }
 });
 
-router.get('/approved', auth, isAdmin, async (req, res) => {
+// Admin: get a specific employee's leave records, balance and info
+router.get('/employee/:employeeId', auth, isAdmin, async (req, res) => {
   try {
-    const [balance] = await db.query(
-      `SELECT earned_leave FROM leave_balance WHERE employee_id = ?`,
-      [req.user.employee_id]
-    );
+    const { employeeId } = req.params;
+    const statusFilter = req.query.status; // 'Approved', 'Pending', 'Rejected', or undefined for all
 
-    const [leaves] = await db.query(
-      `SELECT lr.*, e.name as employee_name, e.employee_id as emp_id, e.designation
-       FROM leave_requests lr
-       JOIN employees e ON lr.employee_id = e.employee_id
-       WHERE lr.status = 'Approved'
-       ORDER BY lr.created_at DESC`
+    // 1. Fetch employee info
+    const [empRows] = await db.query(
+      'SELECT id, name, email, designation, employee_id, role FROM employees WHERE employee_id = ?',
+      [employeeId]
     );
-    leaves.forEach(leave => {
-      leave.start_date = toLocalYMD(leave.start_date);
-      leave.end_date = toLocalYMD(leave.end_date);
-    });
-    res.json({ 
-      success: "true", 
-      message: "Leaves fetched successfully", 
-      data: { 
-        leaves, 
-        earned_leave: balance[0]?.earned_leave ?? 0 
-      } 
+    if (empRows.length === 0) {
+      return res.status(404).json({ success: "false", message: 'Employee not found' });
+    }
+    const employee = empRows[0];
+
+    // 2. Fetch leave balance
+    const [balanceRows] = await db.query(
+      'SELECT * FROM leave_balance WHERE employee_id = ?',
+      [employeeId]
+    );
+    const balance = balanceRows[0] || {};
+    const totalLeave = Number(balance.earned_leave || 0) + Number(balance.quarterly_leave || 0);
+    const balanceLeave = Number(balance.earned_leave || 0);
+    const earlyLeave = Number(balance.quarterly_leave || 0);
+
+    // 3. Fetch leave requests
+    let queryStr = 'SELECT * FROM leave_requests WHERE employee_id = ?';
+    const queryParams = [employeeId];
+
+    if (statusFilter && statusFilter !== 'All') {
+      queryStr += ' AND status = ?';
+      queryParams.push(statusFilter);
+    }
+
+    queryStr += ' ORDER BY created_at DESC';
+
+    const [leaveRows] = await db.query(queryStr, queryParams);
+
+    const leaves = leaveRows.map(leave => ({
+      id: leave.id,
+      leaveType: leave.leave_type,
+      applicationType: leave.duration || 'Full Day',
+      status: leave.status,
+      fromDate: toLocalYMD(leave.start_date),
+      toDate: toLocalYMD(leave.end_date),
+      appliedOn: toLocalYMD(leave.created_at),
+      totalDays: leave.no_of_days,
+      reason: leave.reason,
+    }));
+
+    res.json({
+      success: "true",
+      message: "Employee leave history fetched successfully",
+      data: {
+        employee: {
+          name: employee.name,
+          employeeId: employee.employee_id,
+          designation: employee.designation,
+          email: employee.email,
+        },
+        leaveSummary: {
+          totalLeave: String(totalLeave),
+          balanceLeave: String(balanceLeave),
+          earlyLeave: String(earlyLeave),
+        },
+        leaves,
+      }
     });
   } catch (error) {
     res.status(500).json({ success: "false", message: 'Server error', error: error.message });

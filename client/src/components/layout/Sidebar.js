@@ -36,7 +36,7 @@ const Sidebar = () => {
 
   if (user?.role === 'admin') {
     menuItems.push(
-      { path: '/leave-records', icon: <FiCheckSquare />, label: 'Leave Records' }
+      { path: '/leave-records', icon: <FiCheckSquare />, label: 'Leave History' }
     );
       menuItems.push(
       { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance' }
