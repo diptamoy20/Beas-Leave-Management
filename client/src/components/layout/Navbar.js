@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Alert, Button, Dropdown, Form, Modal } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { FiMenu, FiBell, FiMoon, FiSun, FiUser, FiLogOut } from 'react-icons/fi';
+import { FiMenu, FiBell, FiMoon, FiSun, FiUser, FiLogOut, FiCalendar, FiAward } from 'react-icons/fi';
 import { toggleSidebar, toggleDarkMode } from '../../store/slices/themeSlice';
 import { logout } from '../../store/slices/authSlice';
 import { useState } from 'react';
@@ -28,6 +28,22 @@ const Navbar = () => {
     navigate('/login');
   };
 
+  // Greeting based on time of day
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }, []);
+
+  const todayFormatted = useMemo(() => {
+    return new Date().toLocaleDateString('en-GB', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }, []);
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
@@ -78,10 +94,23 @@ const Navbar = () => {
             <span />
           </span>
         </button>
-        <div className="navbar-greeting">
+        <div className="db-hero-badge-row">
+          <h2 className="db-hero-title">
+            {greeting}, {user?.name || 'Team Member'}!
+          </h2>
+          <span className="db-role-pill">
+            <FiAward size={13} />
+            <span>{user?.role || 'Employee'}</span>
+          </span>
+          <span className="db-date-pill">
+            <FiCalendar size={13} />
+            <span>{todayFormatted}</span>
+          </span>
+        </div>
+        {/* <div className="navbar-greeting">
           <span className="navbar-kicker">Workspace</span>
           <h5 className="mb-0">Good Morning, {user?.name?.split(' ')[0]}!</h5>
-        </div>
+        </div> */}
       </div>
 
       <div className="navbar-right">

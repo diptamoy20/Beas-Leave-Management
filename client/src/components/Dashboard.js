@@ -32,22 +32,6 @@ const Dashboard = () => {
     dispatch(fetchDashboardData());
   }, [dispatch]);
 
-  // Greeting based on time of day
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }, []);
-
-  const todayFormatted = useMemo(() => {
-    return new Date().toLocaleDateString('en-GB', {
-      weekday: 'long',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  }, []);
 
   // Recent activities from dashboard API
   const recentActivities = useMemo(() => {
@@ -209,19 +193,6 @@ const Dashboard = () => {
       {/* Hero Welcome Banner */}
       <div className="db-hero-banner">
         <div className="db-hero-left">
-          <div className="db-hero-badge-row">
-            <span className="db-role-pill">
-              <FiAward size={13} />
-              <span>{user?.role || 'Employee'}</span>
-            </span>
-            <span className="db-date-pill">
-              <FiCalendar size={13} />
-              <span>{todayFormatted}</span>
-            </span>
-          </div>
-          <h2 className="db-hero-title">
-            {greeting}, {user?.name || 'Team Member'}!
-          </h2>
           <p className="db-hero-subtitle">
             Here is what's happening with your leave balances, recent requests, and holiday schedule.
           </p>
@@ -337,7 +308,7 @@ const Dashboard = () => {
                             <span>
                               {formatDate(leave.start_date || leave.fromDate)}
                               {(leave.end_date || leave.toDate) &&
-                              (leave.end_date || leave.toDate) !== (leave.start_date || leave.fromDate)
+                                (leave.end_date || leave.toDate) !== (leave.start_date || leave.fromDate)
                                 ? ` → ${formatDate(leave.end_date || leave.toDate)}`
                                 : ''}
                             </span>

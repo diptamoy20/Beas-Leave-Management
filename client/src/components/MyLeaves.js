@@ -110,7 +110,7 @@ const MyLeaves = () => {
     },
     {
       name: 'Action',
-      width: '110px',
+      width: '130px',
       right: true,
       cell: (row) => (
         <button
