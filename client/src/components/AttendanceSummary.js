@@ -258,79 +258,130 @@ const AttendanceSummary = () => {
   ];
 
   return (
-    <div>
-      <h4 className="mb-4 dashboard-toggle">Attendence Summary</h4>
-      <Card className="dashboard-card">
-        <Card.Body>
-          <Form onSubmit={handleSearch}>
-            <Row className="align-items-end">
-              <Col md={4}>
-                <Form.Group>
-                  <Form.Label>Employee (search by name or id)</Form.Label>
-                  <Form.Control
-                    list="employee-list"
-                    placeholder="Type to search..."
-                    value={employeeSearch}
-                    onChange={(e) => {
-                      setEmployeeSearch(e.target.value);
-                      // clear selectedEmployeeId while typing
-                      setSelectedEmployeeId('');
-                    }}
-                    onBlur={() => {
-                      // Try to extract employee id from formats like: "Name (12345)" or direct id/name
-                      const trimmed = (employeeSearch || '').trim();
-                      // match trailing (id)
-                      const m = trimmed.match(/\((\d+)\)\s*$/);
-                      if (m) {
-                        setSelectedEmployeeId(m[1]);
-                        return;
-                      }
-                      // exact id match
-                      let found = employees.find((emp) => String(emp.employee_id) === trimmed || String(emp.id) === trimmed);
-                      if (!found) {
-                        // try name match (case-insensitive, startsWith or includes)
-                        const low = trimmed.toLowerCase();
-                        found = employees.find((emp) => emp.name && emp.name.toLowerCase() === low) || employees.find((emp) => emp.name && emp.name.toLowerCase().includes(low));
-                      }
-                      setSelectedEmployeeId(found ? found.employee_id : '');
-                    }}
-                  />
-                  <datalist id="employee-list">
-                    {employees.map((emp) => (
-                      <option key={emp.employee_id} value={`${emp.name} (${emp.employee_id})`} />
-                    ))}
-                  </datalist>
-                </Form.Group>
-              </Col>
-              <Col md={2}>
-                <Form.Group>
-                  <Form.Label>From</Form.Label>
-                  <Form.Control type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                </Form.Group>
-              </Col>
-              <Col md={2}>
-                <Form.Group>
-                  <Form.Label>To</Form.Label>
-                  <Form.Control type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                </Form.Group>
-              </Col>
-              <Col md={4} className="d-flex gap-2">
-                <Button variant="primary" type="submit">Search</Button>
-                <Button variant="outline-secondary" onClick={() => { setEmployeeSearch(''); setSelectedEmployeeId(''); setFromDate(''); setToDate(''); setResults([]); }}>Reset</Button>
-                <Button variant="success" onClick={handleExport} disabled={!results.length}>Export Excel</Button>
-              </Col>
-            </Row>
-          </Form>
+    <div className="elh-wrapper">
+      {/* Page Header */}
+      <div className="elh-page-header">
+        <div className="elh-header-title-area">
+          <div className="elh-breadcrumb">
+            <span>Workspace</span>
+            <span>/</span>
+            <span>Attendance</span>
+            <span>/</span>
+            <span className="active">Summary</span>
+          </div>
+          <h2 className="elh-page-title">Attendance Summary</h2>
+          <p className="elh-page-subtitle">
+            Search and export detailed employee attendance history across customizable date ranges.
+          </p>
+        </div>
+      </div>
 
-          <hr />
+      {/* Filter Toolbar Card */}
+      <div className="elh-toolbar-card mb-4">
+        <Form onSubmit={handleSearch} className="w-100">
+          <Row className="align-items-end g-3">
+            <Col md={4}>
+              <Form.Group>
+                <Form.Label className="small fw-semibold text-muted mb-1">Employee (Search Name or ID)</Form.Label>
+                <Form.Control
+                  list="employee-list"
+                  placeholder="Type to search..."
+                  value={employeeSearch}
+                  style={{ borderRadius: '12px', height: '42px', fontSize: '0.88rem' }}
+                  onChange={(e) => {
+                    setEmployeeSearch(e.target.value);
+                    setSelectedEmployeeId('');
+                  }}
+                  onBlur={() => {
+                    const trimmed = (employeeSearch || '').trim();
+                    const m = trimmed.match(/\((\d+)\)\s*$/);
+                    if (m) {
+                      setSelectedEmployeeId(m[1]);
+                      return;
+                    }
+                    let found = employees.find((emp) => String(emp.employee_id) === trimmed || String(emp.id) === trimmed);
+                    if (!found) {
+                      const low = trimmed.toLowerCase();
+                      found = employees.find((emp) => emp.name && emp.name.toLowerCase() === low) || employees.find((emp) => emp.name && emp.name.toLowerCase().includes(low));
+                    }
+                    setSelectedEmployeeId(found ? found.employee_id : '');
+                  }}
+                />
+                <datalist id="employee-list">
+                  {employees.map((emp) => (
+                    <option key={emp.employee_id} value={`${emp.name} (${emp.employee_id})`} />
+                  ))}
+                </datalist>
+              </Form.Group>
+            </Col>
+            <Col md={2}>
+              <Form.Group>
+                <Form.Label className="small fw-semibold text-muted mb-1">From Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  value={fromDate}
+                  style={{ borderRadius: '12px', height: '42px', fontSize: '0.88rem' }}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={2}>
+              <Form.Group>
+                <Form.Label className="small fw-semibold text-muted mb-1">To Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  value={toDate}
+                  style={{ borderRadius: '12px', height: '42px', fontSize: '0.88rem' }}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={4} className="d-flex align-items-center gap-2">
+              <Button
+                variant="primary"
+                type="submit"
+                style={{ borderRadius: '12px', height: '42px', padding: '0 18px', fontWeight: '600', fontSize: '0.88rem' }}
+              >
+                Search
+              </Button>
+              <Button
+                variant="outline-secondary"
+                style={{ borderRadius: '12px', height: '42px', padding: '0 14px', fontWeight: '600', fontSize: '0.88rem' }}
+                onClick={() => {
+                  setEmployeeSearch('');
+                  setSelectedEmployeeId('');
+                  setFromDate('');
+                  setToDate('');
+                  setResults([]);
+                }}
+              >
+                Reset
+              </Button>
+              <Button
+                variant="success"
+                style={{ borderRadius: '12px', height: '42px', padding: '0 16px', fontWeight: '600', fontSize: '0.88rem' }}
+                onClick={handleExport}
+                disabled={!results.length}
+              >
+                Export Excel
+              </Button>
+            </Col>
+          </Row>
+        </Form>
+      </div>
 
-          {loading ? (
-            <div className="text-center py-4">Loading...</div>
-          ) : (
-            <DataTable columns={columns} data={results} pagination paginationPerPage={10} conditionalRowStyles={conditionalRowStyles} />
-          )}
-        </Card.Body>
-      </Card>
+      {/* Table Container */}
+      <div className="elh-table-card">
+        <DataTable
+          columns={columns}
+          data={results}
+          progressPending={loading}
+          pagination
+          paginationPerPage={10}
+          paginationRowsPerPageOptions={[10, 20, 30, 50]}
+          conditionalRowStyles={conditionalRowStyles}
+        />
+      </div>
     </div>
   );
 };

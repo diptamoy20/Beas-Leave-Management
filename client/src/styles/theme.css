@@ -1105,3 +1105,112 @@ textarea.form-control {
     padding: 18px;
   }
 }
+
+/* ==========================================================================
+   Global Web Table System & Data Table Enhancements
+   ========================================================================== */
+.custom-web-table-container {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--light-border);
+  box-shadow: 0 10px 30px rgba(23, 43, 54, 0.04);
+  background: var(--light-surface);
+  backdrop-filter: blur(12px);
+}
+
+.dark-mode .custom-web-table-container {
+  border-color: var(--dark-border);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  background: var(--dark-surface);
+}
+
+/* React Data Table overrides */
+.rdt_TableHeader {
+  background: transparent !important;
+  color: var(--primary-deep) !important;
+  font-weight: 700 !important;
+  padding: 18px 20px !important;
+}
+
+.dark-mode .rdt_TableHeader {
+  color: var(--dark-text) !important;
+}
+
+.rdt_TableHeadRow {
+  background: rgba(31, 78, 95, 0.04) !important;
+  border-bottom: 1px solid var(--light-border) !important;
+  min-height: 52px !important;
+}
+
+.dark-mode .rdt_TableHeadRow {
+  background: rgba(0, 0, 0, 0.25) !important;
+  border-bottom-color: var(--dark-border) !important;
+}
+
+.rdt_TableCol {
+  color: var(--light-muted) !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  padding: 14px 18px !important;
+}
+
+.dark-mode .rdt_TableCol {
+  color: var(--dark-muted) !important;
+}
+
+.rdt_TableRow {
+  background: transparent !important;
+  border-bottom: 1px solid var(--light-border) !important;
+  min-height: 54px !important;
+  transition: background-color 0.18s ease !important;
+}
+
+.rdt_TableRow:hover {
+  background: rgba(47, 127, 143, 0.05) !important;
+}
+
+.dark-mode .rdt_TableRow {
+  border-bottom-color: var(--dark-border) !important;
+}
+
+.dark-mode .rdt_TableRow:hover {
+  background: rgba(120, 194, 209, 0.08) !important;
+}
+
+.rdt_TableCell {
+  color: var(--light-text) !important;
+  font-size: 0.88rem !important;
+  padding: 14px 18px !important;
+}
+
+.dark-mode .rdt_TableCell {
+  color: var(--dark-text) !important;
+}
+
+.rdt_Pagination {
+  background: transparent !important;
+  border-top: 1px solid var(--light-border) !important;
+  color: var(--light-muted) !important;
+  padding: 10px 18px !important;
+}
+
+.dark-mode .rdt_Pagination {
+  border-top-color: var(--dark-border) !important;
+  color: var(--dark-muted) !important;
+}
+
+.rdt_Pagination select {
+  border-radius: 8px !important;
+  border: 1px solid var(--light-border) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: var(--light-text) !important;
+  padding: 4px 8px !important;
+}
+
+.dark-mode .rdt_Pagination select {
+  border-color: var(--dark-border) !important;
+  background: rgba(17, 31, 38, 0.9) !important;
+  color: var(--dark-text) !important;
+}

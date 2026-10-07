@@ -4,6 +4,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchHolidays } from '../store/slices/holidaySlice';
 import DataTable from './common/DataTable';
 import axios from 'axios';
+import { FiCalendar, FiPlus, FiUpload, FiTrash2, FiDownload, FiPrinter } from 'react-icons/fi';
+import '../assets/css/EmployeeLeaveHistory.css';
 
 const Holidays = () => {
   const dispatch = useDispatch();
@@ -307,56 +309,106 @@ const Holidays = () => {
   ];
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h4 className="mb-0 dashboard-toggle">Holiday List {selectedYear}</h4>
-        <div className="d-flex gap-2 align-items-center">
-          <Form.Select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            style={{ width: 'auto' }}
-          >
-            {[2024, 2025, 2026, 2027, 2028].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </Form.Select>
+    <div className="elh-wrapper">
+      {/* Page Header */}
+      <div className="elh-page-header">
+        <div className="elh-header-title-area">
+          <div className="elh-breadcrumb">
+            <span>Workspace</span>
+            <span>/</span>
+            <span>Calendar</span>
+            <span>/</span>
+            <span className="active">Holidays</span>
+          </div>
+          <h2 className="elh-page-title">Holiday Calendar {selectedYear}</h2>
+          <p className="elh-page-subtitle">
+            Official company holiday schedule, general observances, and restricted holidays.
+          </p>
+        </div>
+      </div>
+
+      {/* Toolbar Card */}
+      <div className="elh-toolbar-card mb-4">
+        <div className="d-flex align-items-center gap-3 flex-wrap">
+          <div className="d-flex align-items-center gap-2">
+            <span className="small fw-semibold text-muted">Year:</span>
+            <Form.Select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              style={{ width: '110px', borderRadius: '12px', height: '42px', fontSize: '0.88rem' }}
+            >
+              {[2024, 2025, 2026, 2027, 2028].map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </Form.Select>
+          </div>
+          <div className="elh-count-pill">
+            <FiCalendar size={14} />
+            <span>{holidays?.length || 0} Holidays Scheduled</span>
+          </div>
+        </div>
+
+        <div className="d-flex align-items-center gap-2 flex-wrap">
           {isAdmin && (
             <>
-              <Button variant="primary" onClick={() => setShowAddModal(true)}>
-                + Add Holiday
+              <Button
+                variant="primary"
+                onClick={() => setShowAddModal(true)}
+                style={{ borderRadius: '12px', height: '42px', padding: '0 16px', fontWeight: '600', fontSize: '0.85rem' }}
+              >
+                <FiPlus size={15} className="me-1" />
+                Add Holiday
               </Button>
-              <Button variant="primary" onClick={() => setShowUploadModal(true)}>
-                📤 Upload Excel
+              <Button
+                variant="secondary"
+                onClick={() => setShowUploadModal(true)}
+                style={{ borderRadius: '12px', height: '42px', padding: '0 16px', fontWeight: '600', fontSize: '0.85rem' }}
+              >
+                <FiUpload size={14} className="me-1" />
+                Upload Excel
               </Button>
-              <Button variant="primary" onClick={handleClearYear}>
-                🗑️ Clear Year
+              <Button
+                variant="outline-danger"
+                onClick={handleClearYear}
+                style={{ borderRadius: '12px', height: '42px', padding: '0 14px', fontWeight: '600', fontSize: '0.85rem' }}
+              >
+                <FiTrash2 size={14} className="me-1" />
+                Clear Year
               </Button>
             </>
           )}
-          <Button variant="primary" onClick={exportToExcel}>
-            📊 Export Excel
+          <Button
+            variant="outline-secondary"
+            onClick={exportToExcel}
+            style={{ borderRadius: '12px', height: '42px', padding: '0 14px', fontWeight: '600', fontSize: '0.85rem' }}
+          >
+            <FiDownload size={14} className="me-1" />
+            Excel
           </Button>
-          <Button variant="primary" onClick={exportToPDF}>
-            📄 Export PDF
+          <Button
+            variant="outline-secondary"
+            onClick={exportToPDF}
+            style={{ borderRadius: '12px', height: '42px', padding: '0 14px', fontWeight: '600', fontSize: '0.85rem' }}
+          >
+            <FiPrinter size={14} className="me-1" />
+            PDF
           </Button>
         </div>
       </div>
 
-      <Card className="dashboard-card">
-        <Card.Body>
-          {loading ? (
-            <div className="text-center py-5">Loading...</div>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={holidays}
-              pagination
-              paginationPerPage={10}
-              paginationRowsPerPageOptions={[10, 20, 30, 50]}
-            />
-          )}
-        </Card.Body>
-      </Card>
+      {/* Table Container */}
+      <div className="elh-table-card">
+        <DataTable
+          columns={columns}
+          data={holidays || []}
+          progressPending={loading}
+          pagination
+          paginationPerPage={10}
+          paginationRowsPerPageOptions={[10, 20, 30, 50]}
+        />
+      </div>
 
       {/* Upload Modal */}
       <Modal show={showUploadModal} onHide={() => setShowUploadModal(false)} centered>
