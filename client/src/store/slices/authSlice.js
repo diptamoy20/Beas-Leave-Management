@@ -55,6 +55,23 @@ export const register = createAsyncThunk('auth/register', async (userData, { rej
   }
 });
 
+export const fetchCurrentUser = createAsyncThunk('auth/fetchCurrentUser', async (_, { rejectWithValue }) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    const response = await axios.get('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.data?.data) {
+      localStorage.setItem('user', JSON.stringify(response.data.data));
+      return response.data.data;
+    }
+    return null;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Failed to fetch current user');
+  }
+});
+
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
@@ -64,6 +81,10 @@ const authSlice = createSlice({
     error: null,
   },
   reducers: {
+    setUser: (state, action) => {
+      state.user = action.payload;
+      localStorage.setItem('user', JSON.stringify(action.payload));
+    },
     logout: (state) => {
       state.user = null;
       state.token = null;
@@ -99,9 +120,14 @@ const authSlice = createSlice({
       .addCase(register.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(fetchCurrentUser.fulfilled, (state, action) => {
+        if (action.payload) {
+          state.user = action.payload;
+        }
       });
   },
 });
 
-export const { logout, clearError } = authSlice.actions;
+export const { setUser, logout, clearError } = authSlice.actions;
 export default authSlice.reducer;

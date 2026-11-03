@@ -290,6 +290,17 @@
   color: #9d7fe3;
 }
 
+.db-kpi-card.compoff { color: #0284c7; }
+.db-kpi-card.compoff .db-kpi-icon-wrapper {
+  background: rgba(2, 132, 199, 0.12);
+  color: #0284c7;
+}
+.dark-mode .db-kpi-card.compoff { color: #38bdf8; }
+.dark-mode .db-kpi-card.compoff .db-kpi-icon-wrapper {
+  background: rgba(2, 132, 199, 0.2);
+  color: #38bdf8;
+}
+
 .db-kpi-info {
   display: flex;
   flex-direction: column;

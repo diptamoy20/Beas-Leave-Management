@@ -100,7 +100,7 @@ const Navbar = () => {
           </h2>
           <span className="db-role-pill">
             <FiAward size={13} />
-            <span>{user?.role || 'Employee'}</span>
+            <span>{user?.role ? user.role.replace(/_/g, ' ').toUpperCase() : 'EMPLOYEE'}</span>
           </span>
           <span className="db-date-pill">
             <FiCalendar size={13} />

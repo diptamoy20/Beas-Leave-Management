@@ -67,6 +67,7 @@ router.get('/', auth, async (req, res) => {
     const totalLeave = Number(balance?.earned_leave || 12) + Number(balance?.quarterly_leave || 15);
     const balanceLeave = Number(balance?.earned_leave || 14); // Default to 14 if earned_leave doesn't exist yet
     const earlyLeave = Number(balance?.quarterly_leave !== undefined ? balance.quarterly_leave : 3); // Fallback to 3 if undefined
+    const compOff = Number(balance?.comp_off || 0);
 
     const leaveRequestByEmployee = requests.length;
 
@@ -78,7 +79,8 @@ router.get('/', auth, async (req, res) => {
         leaveSummary: {
           totalLeave: String(totalLeave),
           balanceLeave: String(balanceLeave),
-          earlyLeave: String(earlyLeave)
+          earlyLeave: String(earlyLeave),
+          compOff: String(compOff)
         },
         leaveRequests: formattedRequests
       }

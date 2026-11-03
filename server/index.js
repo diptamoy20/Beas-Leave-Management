@@ -11,6 +11,9 @@ const employeeRoutes = require('./routes/employees');
 const attendanceRoutes = require('./routes/attendance');
 const holidayRoutes = require('./routes/holidays');
 const dashboardRoutes = require('./routes/dashboard');
+const adminManagementRoutes = require('./routes/adminManagement');
+const compOffRoutes = require('./routes/compOff');
+const clientMeetingRoutes = require('./routes/clientMeetings');
 
 const app = express();
 
@@ -23,6 +26,9 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/admin', adminManagementRoutes);
+app.use('/api/comp-off', compOffRoutes);
+app.use('/api/meetings', clientMeetingRoutes);
 
 // Serve static files from React build in production
 if (process.env.NODE_ENV === 'production') {

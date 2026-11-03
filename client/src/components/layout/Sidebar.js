@@ -5,42 +5,70 @@ import {
   FiHome,
   FiCalendar,
   FiFileText,
-  FiClock,
   FiUsers,
-  FiCheckSquare
+  FiCheckSquare,
+  FiShield,
+  FiCheckCircle,
+  FiClock,
+  FiVideo
 } from 'react-icons/fi';
+
+const ADMIN_ROLES = ['super_admin', 'admin_1', 'admin_2', 'admin_3', 'admin'];
 
 const Sidebar = () => {
   const { sidebarExpanded } = useSelector((state) => state.theme);
   const { user } = useSelector((state) => state.auth);
 
+  const role = user?.role;
+  const isSuperAdmin = role === 'super_admin';
+  const isAdmin = ADMIN_ROLES.includes(role);
+  const canManageAdmins = isSuperAdmin || Boolean(user?.permissions?.can_manage_admins);
+  const canViewAllLeaves = isSuperAdmin || user?.permissions?.can_view_all_leaves !== false;
+
   const menuItems = [
     { path: '/dashboard', icon: <FiHome />, label: 'Dashboard' },
     { path: '/apply-leave', icon: <FiFileText />, label: 'Apply Leave' },
     { path: '/my-leaves', icon: <FiCalendar />, label: 'My Leaves' },
-    // { path: '/attendance', icon: <FiClock />, label: 'My Attendance' },
+    { path: '/attendance', icon: <FiCheckCircle />, label: 'Attendance' },
+    { path: '/comp-off', icon: <FiClock />, label: 'Comp-Off' },
+    { path: '/client-meetings', icon: <FiVideo />, label: 'Client Meetings' },
     { path: '/holidays', icon: <FiCalendar />, label: 'Holidays' },
-    // { path: '/leave-balance', icon: <FiCheckSquare />, label: 'Leave Balance' },
   ];
 
-  if (user?.role === 'manager'
-    // || user?.role === 'admin'
-  ) {
-    menuItems.push(
-      { path: '/manage-leaves', icon: <FiUsers />, label: 'Manage Leaves' }
-    );
-    // menuItems.push(
-    //   { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance' }
-    // );
+  // Super Admin: Admin Management
+  if (canManageAdmins) {
+    menuItems.push({
+      path: '/admin-management',
+      icon: <FiShield />,
+      label: 'Admin Hierarchy'
+    });
   }
 
-  if (user?.role === 'admin') {
-    menuItems.push(
-      { path: '/leave-records', icon: <FiCheckSquare />, label: 'Employees Leave' }
-    );
-    // menuItems.push(
-    //   { path: '/attendance-summary', icon: <FiClock />, label: 'Attendance' }
-    // );
+  // Super Admin & Authorized Admins: Post-Manager Approval Leave Oversight
+  if (isAdmin && canViewAllLeaves) {
+    menuItems.push({
+      path: '/approved-leaves-review',
+      icon: <FiCheckCircle />,
+      label: 'Leave Oversight'
+    });
+  }
+
+  // All Admin tiers: Employee Leave Records
+  if (isAdmin) {
+    menuItems.push({
+      path: '/leave-records',
+      icon: <FiCheckSquare />,
+      label: 'Employees Leave'
+    });
+  }
+
+  // Managers & Admins assigned to approval duties
+  if (role === 'manager' || isSuperAdmin) {
+    menuItems.push({
+      path: '/manage-leaves',
+      icon: <FiUsers />,
+      label: 'Manage Leaves'
+    });
   }
 
   return (
