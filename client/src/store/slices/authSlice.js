@@ -1,11 +1,45 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
+// Safely parse user from localStorage to prevent crash on corrupted/undefined values
+const getUserFromStorage = () => {
+  try {
+    const user = localStorage.getItem('user');
+    if (!user || user === 'undefined' || user === 'null') {
+      if (user === 'undefined' || user === 'null') {
+        localStorage.removeItem('user');
+      }
+      return null;
+    }
+    return JSON.parse(user);
+  } catch (error) {
+    console.error('Error parsing user from localStorage:', error);
+    localStorage.removeItem('user');
+    return null;
+  }
+};
+
+const getTokenFromStorage = () => {
+  const token = localStorage.getItem('token');
+  if (!token || token === 'undefined' || token === 'null') {
+    if (token === 'undefined' || token === 'null') {
+      localStorage.removeItem('token');
+    }
+    return null;
+  }
+  return token;
+};
+
 export const login = createAsyncThunk('auth/login', async (credentials, { rejectWithValue }) => {
   try {
     const response = await axios.post('/api/auth/login', credentials);
-    localStorage.setItem('token', response.data.data.token);
-    localStorage.setItem('user', JSON.stringify(response.data.data.user));
+    const { token, user } = response.data?.data || {};
+    if (token) {
+      localStorage.setItem('token', token);
+    }
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    }
     return response.data.data;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Login failed');
@@ -24,8 +58,8 @@ export const register = createAsyncThunk('auth/register', async (userData, { rej
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user: JSON.parse(localStorage.getItem('user')) || null,
-    token: localStorage.getItem('token') || null,
+    user: getUserFromStorage(),
+    token: getTokenFromStorage(),
     loading: false,
     error: null,
   },
@@ -48,8 +82,8 @@ const authSlice = createSlice({
       })
       .addCase(login.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token;
+        state.user = action.payload?.user || null;
+        state.token = action.payload?.token || null;
       })
       .addCase(login.rejected, (state, action) => {
         state.loading = false;
