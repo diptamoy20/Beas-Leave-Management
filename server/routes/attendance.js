@@ -480,4 +480,296 @@ router.get('/summary', auth, isManager, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// ATTENDANCE WAIVE-OFF / REGULARIZATION WORKFLOW
+// ---------------------------------------------------------------------------
+
+// 1. Submit Waive-Off Request (Employee for self, or Manager/Admin on behalf)
+router.post('/waive-off/request', auth, async (req, res) => {
+  try {
+    const callerEmpId = req.user.employee_id;
+    const isCallerManager =
+      req.user.role === 'manager' ||
+      ['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3'].includes(req.user.role);
+
+    let { employee_id, date, waive_off_type, proposed_clock_in, proposed_clock_out, reason } = req.body;
+
+    // Default to caller if employee_id not specified or if not manager
+    const targetEmpId = isCallerManager && employee_id ? Number(employee_id) : callerEmpId;
+
+    if (!date) {
+      return res.status(400).json({ success: "false", message: 'Attendance date is required.' });
+    }
+
+    if (!waive_off_type) {
+      return res.status(400).json({ success: "false", message: 'Please specify a waive-off issue type (e.g. Missed Punch, Late Arrival).' });
+    }
+
+    if (!reason || reason.trim().length < 5) {
+      return res.status(400).json({ success: "false", message: 'A detailed reason (at least 5 characters) is required for attendance correction.' });
+    }
+
+    // Verify employee exists
+    const [empRows] = await db.query('SELECT employee_id, name FROM employees WHERE employee_id = ?', [targetEmpId]);
+    if (empRows.length === 0) {
+      return res.status(404).json({ success: "false", message: 'Target employee not found.' });
+    }
+
+    // Check if a pending waive-off already exists for this employee and date
+    const [existingPending] = await db.query(
+      "SELECT id FROM attendance_waive_off_requests WHERE employee_id = ? AND date = ? AND status = 'Pending'",
+      [targetEmpId, date]
+    );
+
+    if (existingPending.length > 0) {
+      return res.status(400).json({
+        success: "false",
+        message: `A pending waive-off request already exists for ${date}. Please wait for review or contact your manager.`
+      });
+    }
+
+    const [result] = await db.run(`
+      INSERT INTO attendance_waive_off_requests (
+        employee_id, date, waive_off_type, proposed_clock_in, proposed_clock_out, reason, status, requested_by
+      ) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?)
+    `, [
+      targetEmpId,
+      date,
+      waive_off_type,
+      proposed_clock_in || null,
+      proposed_clock_out || null,
+      reason.trim(),
+      callerEmpId
+    ]);
+
+    res.status(201).json({
+      success: "true",
+      message: 'Attendance waive-off request submitted successfully. Pending manager approval.',
+      data: {
+        id: result.insertId,
+        employee_id: targetEmpId,
+        date,
+        waive_off_type,
+        status: 'Pending'
+      }
+    });
+  } catch (error) {
+    console.error('Error submitting waive-off request:', error);
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
+  }
+});
+
+// 2. Get current employee's waive-off requests
+router.get('/waive-off/my-requests', auth, async (req, res) => {
+  try {
+    const employeeId = req.user.employee_id;
+    const [rows] = await db.query(`
+      SELECT 
+        w.*,
+        rev.name AS reviewer_name,
+        rev.designation AS reviewer_designation
+      FROM attendance_waive_off_requests w
+      LEFT JOIN employees rev ON w.reviewed_by = rev.employee_id
+      WHERE w.employee_id = ?
+      ORDER BY w.created_at DESC
+    `, [employeeId]);
+
+    const formatted = rows.map(r => ({
+      ...r,
+      date: formatDateLocal(r.date),
+      created_at: r.created_at,
+      reviewed_at: r.reviewed_at
+    }));
+
+    res.json({ success: "true", message: 'Waive-off requests fetched', data: { requests: formatted } });
+  } catch (error) {
+    console.error('Error fetching my waive-off requests:', error);
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
+  }
+});
+
+// 3. Manager/Admin: Get all waive-off requests with filters
+router.get('/waive-off/all', auth, isManager, async (req, res) => {
+  try {
+    const { status = 'All', search = '', from, to } = req.query;
+
+    let query = `
+      SELECT 
+        w.*,
+        e.name AS employee_name,
+        e.designation AS employee_designation,
+        e.department AS employee_department,
+        req_by.name AS requester_name,
+        rev.name AS reviewer_name
+      FROM attendance_waive_off_requests w
+      JOIN employees e ON w.employee_id = e.employee_id
+      LEFT JOIN employees req_by ON w.requested_by = req_by.employee_id
+      LEFT JOIN employees rev ON w.reviewed_by = rev.employee_id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (status && status !== 'All') {
+      query += ' AND w.status = ?';
+      params.push(status);
+    }
+
+    if (search) {
+      query += ' AND (e.name LIKE ? OR e.employee_id LIKE ? OR w.reason LIKE ?)';
+      const p = `%${search}%`;
+      params.push(p, p, p);
+    }
+
+    if (from) {
+      query += ' AND w.date >= ?';
+      params.push(from);
+    }
+
+    if (to) {
+      query += ' AND w.date <= ?';
+      params.push(to);
+    }
+
+    query += ' ORDER BY w.created_at DESC';
+
+    const [rows] = await db.query(query, params);
+
+    const formatted = rows.map(r => ({
+      ...r,
+      date: formatDateLocal(r.date)
+    }));
+
+    res.json({ success: "true", message: 'Waive-off requests fetched for manager', data: { requests: formatted } });
+  } catch (error) {
+    console.error('Error fetching manager waive-off requests:', error);
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
+  }
+});
+
+// 4. Manager/Admin: Review Waive-Off Request (Approve or Reject)
+router.put('/waive-off/:id/review', auth, isManager, async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { status, review_remarks = '' } = req.body;
+    const reviewerEmpId = req.user.employee_id;
+
+    if (status) {
+      status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    }
+
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ success: "false", message: "Review status must be 'Approved' or 'Rejected'." });
+    }
+
+    const [existing] = await db.query('SELECT * FROM attendance_waive_off_requests WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: "false", message: 'Waive-off request not found.' });
+    }
+
+    const reqData = existing[0];
+    const targetDate = formatDateLocal(reqData.date);
+
+    // 1. Update the request status and audit info
+    await db.run(`
+      UPDATE attendance_waive_off_requests SET
+        status = ?,
+        reviewed_by = ?,
+        review_remarks = ?,
+        reviewed_at = NOW()
+      WHERE id = ?
+    `, [status, reviewerEmpId, review_remarks.trim(), id]);
+
+    // 2. If Approved, update or insert the actual attendance record
+    if (status === 'Approved') {
+      const inTime = reqData.proposed_clock_in ? reqData.proposed_clock_in.trim() : '09:30:00';
+      const outTime = reqData.proposed_clock_out ? reqData.proposed_clock_out.trim() : '18:30:00';
+
+      const fullClockIn = `${targetDate} ${inTime.length === 5 ? inTime + ':00' : inTime}`;
+      const fullClockOut = `${targetDate} ${outTime.length === 5 ? outTime + ':00' : outTime}`;
+
+      // Check if attendance row already exists for this date
+      const [attRows] = await db.query(
+        'SELECT id, clock_in, clock_out FROM attendance WHERE employee_id = ? AND date = ?',
+        [reqData.employee_id, targetDate]
+      );
+
+      const waiveOffNote = `Waived-Off (${reqData.waive_off_type}): ${reqData.reason}`;
+
+      if (attRows.length > 0) {
+        await db.run(`
+          UPDATE attendance SET
+            clock_in = ?,
+            clock_out = ?,
+            total_time = TIMESTAMPDIFF(MINUTE, ?, ?),
+            is_waived_off = TRUE,
+            waive_off_reason = ?
+          WHERE employee_id = ? AND date = ?
+        `, [
+          fullClockIn,
+          fullClockOut,
+          fullClockIn,
+          fullClockOut,
+          waiveOffNote,
+          reqData.employee_id,
+          targetDate
+        ]);
+      } else {
+        await db.run(`
+          INSERT INTO attendance (
+            employee_id, date, clock_in, clock_out, total_time, is_waived_off, waive_off_reason
+          ) VALUES (?, ?, ?, ?, TIMESTAMPDIFF(MINUTE, ?, ?), TRUE, ?)
+        `, [
+          reqData.employee_id,
+          targetDate,
+          fullClockIn,
+          fullClockOut,
+          fullClockIn,
+          fullClockOut,
+          waiveOffNote
+        ]);
+      }
+    }
+
+    res.json({
+      success: "true",
+      message: `Waive-off request #${id} marked as ${status}${status === 'Approved' ? ' and attendance updated' : ''}.`,
+      data: {
+        id,
+        status,
+        reviewed_by: reviewerEmpId,
+        attendance_updated: status === 'Approved'
+      }
+    });
+  } catch (error) {
+    console.error('Error reviewing waive-off request:', error);
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
+  }
+});
+
+// 5. Manager/Admin: Full Waive-Off Audit Log
+router.get('/waive-off/audit', auth, isManager, async (req, res) => {
+  try {
+    const [logs] = await db.query(`
+      SELECT 
+        w.*,
+        e.name AS employee_name,
+        e.designation AS employee_designation,
+        req_by.name AS requester_name,
+        rev.name AS reviewer_name,
+        rev.designation AS reviewer_designation
+      FROM attendance_waive_off_requests w
+      JOIN employees e ON w.employee_id = e.employee_id
+      LEFT JOIN employees req_by ON w.requested_by = req_by.employee_id
+      LEFT JOIN employees rev ON w.reviewed_by = rev.employee_id
+      ORDER BY w.created_at DESC
+      LIMIT 200
+    `);
+
+    res.json({ success: "true", message: 'Waive-off audit logs fetched', data: { logs } });
+  } catch (error) {
+    console.error('Error fetching waive-off audit:', error);
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;

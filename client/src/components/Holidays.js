@@ -11,7 +11,7 @@ const Holidays = () => {
   const dispatch = useDispatch();
   const { holidays, loading } = useSelector((state) => state.holiday);
   const { user } = useSelector((state) => state.auth);
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'admin_1' || Boolean(user?.permissions?.can_manage_holidays);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);

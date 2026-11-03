@@ -203,10 +203,14 @@ const Dashboard = () => {
             <FiPlus size={16} />
             <span>Apply Leave</span>
           </Link>
+          <Link to="/comp-off" className="db-action-btn-secondary">
+            <FiAward size={16} />
+            <span>Comp-Off</span>
+          </Link>
           <Link to="/my-leaves" className="db-action-btn-secondary">
             <span>My Leaves</span>
           </Link>
-          {user?.role === 'admin' && (
+          {['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3'].includes(user?.role) && (
             <Link to="/leave-records" className="db-action-btn-secondary">
               <span>Leave Records</span>
             </Link>
@@ -248,6 +252,22 @@ const Dashboard = () => {
             <span className="db-kpi-label">Early / Short Leave</span>
             <span className="db-kpi-value">{dashboardData?.leaveSummary?.earlyLeave || '0'}</span>
             <span className="db-kpi-hint">Quarterly quota</span>
+          </div>
+        </div>
+
+        <div
+          className="db-kpi-card compoff"
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate('/comp-off')}
+          title="Click to view Comp-Off ledger and balances"
+        >
+          <div className="db-kpi-icon-wrapper">
+            <FiAward />
+          </div>
+          <div className="db-kpi-info">
+            <span className="db-kpi-label">Comp-Off Balance</span>
+            <span className="db-kpi-value">{dashboardData?.leaveSummary?.compOff ?? '0.0'}</span>
+            <span className="db-kpi-hint">Credited compensatory days</span>
           </div>
         </div>
 

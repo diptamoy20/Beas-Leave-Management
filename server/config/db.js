@@ -1,4 +1,6 @@
 const mysql = require('mysql2/promise');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 // Create MySQL connection pool
 const pool = mysql.createPool({
@@ -156,10 +158,11 @@ async function initializeDatabase() {
     await connection.query(`
       INSERT IGNORE INTO leave_master (leave_name, description) VALUES
       ('Earned leave', 'Standard earned leave balance'),
-      ('Quarterly leave', 'Early leave once per quarter')
+      ('Quarterly leave', 'Early leave once per quarter'),
+      ('Compensatory Off', 'Compensatory off for working on weekends or holidays')
     `);
 
-    // Ensure earned_leave, quarterly_leave and restricted_leave columns exist in leave_balance for existing installs
+    // Ensure earned_leave, quarterly_leave, restricted_leave and comp_off columns exist in leave_balance for existing installs
     const [balanceColumns] = await connection.query("SHOW COLUMNS FROM leave_balance");
     const balanceColNames = balanceColumns.map(col => col.Field);
 
@@ -177,6 +180,27 @@ async function initializeDatabase() {
       await connection.query('ALTER TABLE leave_balance ADD COLUMN restricted_leave INT DEFAULT 3');
       console.log('✅ Added leave_balance.restricted_leave column');
     }
+
+    if (!balanceColNames.includes('comp_off')) {
+      await connection.query('ALTER TABLE leave_balance ADD COLUMN comp_off DECIMAL(5,1) DEFAULT 0.0');
+      console.log('✅ Added leave_balance.comp_off column');
+    }
+
+    // Create comp_off_history table to track complete credit and deduction history
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS comp_off_history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        employee_id INT NOT NULL,
+        type ENUM('CREDIT', 'DEBIT') NOT NULL DEFAULT 'CREDIT',
+        days DECIMAL(5,1) NOT NULL,
+        work_date DATE NULL,
+        reason TEXT NOT NULL,
+        credited_by INT NULL,
+        leave_request_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+      )
+    `);
 
     // Ensure duration and is_restricted columns exist in leave_requests
     const [requestColumns] = await connection.query("SHOW COLUMNS FROM leave_requests");
@@ -197,6 +221,100 @@ async function initializeDatabase() {
       console.log('✅ Added leave_requests.rejection_reason column');
     }
 
+    if (!requestColNames.includes('admin_override_status')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN admin_override_status VARCHAR(50) DEFAULT NULL');
+      console.log('✅ Added leave_requests.admin_override_status column');
+    }
+
+    if (!requestColNames.includes('admin_modified_by')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN admin_modified_by VARCHAR(255) DEFAULT NULL');
+      console.log('✅ Added leave_requests.admin_modified_by column');
+    }
+
+    if (!requestColNames.includes('admin_modification_reason')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN admin_modification_reason TEXT DEFAULT NULL');
+      console.log('✅ Added leave_requests.admin_modification_reason column');
+    }
+
+    if (!requestColNames.includes('admin_modified_at')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN admin_modified_at TIMESTAMP NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.admin_modified_at column');
+    }
+
+    if (!requestColNames.includes('original_start_date')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN original_start_date DATE NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.original_start_date column');
+    }
+
+    if (!requestColNames.includes('original_end_date')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN original_end_date DATE NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.original_end_date column');
+    }
+
+    if (!requestColNames.includes('original_no_of_days')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN original_no_of_days DECIMAL(5,1) NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.original_no_of_days column');
+    }
+
+    if (!requestColNames.includes('is_modified_on_approval')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN is_modified_on_approval BOOLEAN DEFAULT FALSE');
+      console.log('✅ Added leave_requests.is_modified_on_approval column');
+    }
+
+    if (!requestColNames.includes('approval_edit_reason')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN approval_edit_reason TEXT NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.approval_edit_reason column');
+    }
+
+    if (!requestColNames.includes('cancellation_reason')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN cancellation_reason TEXT NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.cancellation_reason column');
+    }
+
+    if (!requestColNames.includes('cancelled_by')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN cancelled_by INT NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.cancelled_by column');
+    }
+
+    if (!requestColNames.includes('cancelled_at')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN cancelled_at TIMESTAMP NULL DEFAULT NULL');
+      console.log('✅ Added leave_requests.cancelled_at column');
+    }
+
+    // Ensure attendance columns for waive-off / regularization
+    const [attendanceCols] = await connection.query("SHOW COLUMNS FROM attendance");
+    const attColNames = attendanceCols.map(col => col.Field);
+
+    if (!attColNames.includes('is_waived_off')) {
+      await connection.query('ALTER TABLE attendance ADD COLUMN is_waived_off BOOLEAN DEFAULT FALSE');
+      console.log('✅ Added attendance.is_waived_off column');
+    }
+
+    if (!attColNames.includes('waive_off_reason')) {
+      await connection.query('ALTER TABLE attendance ADD COLUMN waive_off_reason TEXT NULL DEFAULT NULL');
+      console.log('✅ Added attendance.waive_off_reason column');
+    }
+
+    // Create attendance_waive_off_requests table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS attendance_waive_off_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        employee_id INT NOT NULL,
+        date DATE NOT NULL,
+        waive_off_type VARCHAR(100) NOT NULL,
+        proposed_clock_in VARCHAR(50) NULL,
+        proposed_clock_out VARCHAR(50) NULL,
+        reason TEXT NOT NULL,
+        status VARCHAR(50) DEFAULT 'Pending',
+        requested_by INT NOT NULL,
+        reviewed_by INT NULL,
+        review_remarks TEXT NULL,
+        reviewed_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+      )
+    `);
+
     // Change manager_id to VARCHAR to support multiple IDs
     try {
       const managerCol = requestColumns.find(c => c.Field === 'manager_id');
@@ -214,8 +332,9 @@ async function initializeDatabase() {
       console.warn('Could not modify manager_id:', e.message || e);
     }
 
-    // Change leave_balance columns to DECIMAL to support half days
+    // Change leave_balance columns to DECIMAL to support half days and ensure auto-increment id
     try {
+      await connection.query('ALTER TABLE leave_balance MODIFY id INT NOT NULL AUTO_INCREMENT');
       const earnedCol = balanceColumns.find(c => c.Field === 'earned_leave');
       if (earnedCol && earnedCol.Type.toLowerCase().includes('int')) {
         await connection.query('ALTER TABLE leave_balance MODIFY earned_leave DECIMAL(5,1) DEFAULT 0');
@@ -228,16 +347,74 @@ async function initializeDatabase() {
       console.warn('Could not modify leave balance types:', e.message || e);
     }
 
+    // Create admin_permissions table for subordinate admin permissions
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS admin_permissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        employee_id INT UNIQUE NOT NULL,
+        can_manage_admins BOOLEAN DEFAULT FALSE,
+        can_view_all_leaves BOOLEAN DEFAULT TRUE,
+        can_modify_approved_leaves BOOLEAN DEFAULT FALSE,
+        can_adjust_balances BOOLEAN DEFAULT FALSE,
+        can_manage_holidays BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+      )
+    `);
 
-    // Seed roles
+    // Seed roles (including Super Admin, Admin 1, Admin 2, Admin 3)
     await connection.query(`
       INSERT IGNORE INTO roles (name, description) VALUES
       ('employee', 'Regular Employee'),
       ('manager', 'Manager'),
-      ('admin', 'Administrator'),
+      ('admin', 'Administrator (Legacy)'),
+      ('super_admin', 'Super Administrator - Highest Access Level'),
+      ('admin_1', 'Admin 1 - Senior Administrator with broad permissions'),
+      ('admin_2', 'Admin 2 - Intermediate Administrator'),
+      ('admin_3', 'Admin 3 - Junior Administrator with view access'),
       ('hr', 'Human Resources'),
       ('ceo', 'Chief Executive Officer')
     `);
+
+    // Create client_meetings table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS client_meetings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        client_name VARCHAR(255) NOT NULL,
+        meeting_date DATE NOT NULL,
+        start_time VARCHAR(20) NOT NULL,
+        end_time VARCHAR(20) NOT NULL,
+        location_or_link VARCHAR(500) NULL,
+        purpose TEXT NOT NULL,
+        attendees TEXT NOT NULL,
+        organizer_id INT NOT NULL,
+        status VARCHAR(50) DEFAULT 'Scheduled',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (organizer_id) REFERENCES employees(employee_id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create notification_logs table (prevents duplicate emails and tracks notification audit history)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notification_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        type VARCHAR(100) NOT NULL,
+        reference_id INT NOT NULL,
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_name VARCHAR(255) NULL,
+        subject VARCHAR(500) NOT NULL,
+        content_hash VARCHAR(64) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Sent',
+        error_message TEXT NULL,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_content_hash (content_hash),
+        INDEX idx_ref_type (reference_id, type)
+      )
+    `);
+
     connection.release();
     console.log('Database tables initialized successfully');
   } catch (error) {

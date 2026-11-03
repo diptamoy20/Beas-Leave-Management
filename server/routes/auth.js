@@ -2,9 +2,46 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
-const { auth } = require('../middleware/auth');
+const { auth, ADMIN_ROLES } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Helper to get admin permissions
+const getPermissionsForUser = async (user) => {
+  if (!ADMIN_ROLES.includes(user.role)) return {};
+  if (user.role === 'super_admin') {
+    return {
+      can_manage_admins: true,
+      can_view_all_leaves: true,
+      can_modify_approved_leaves: true,
+      can_adjust_balances: true,
+      can_manage_holidays: true,
+    };
+  }
+
+  const [permRows] = await db.query(
+    'SELECT can_manage_admins, can_view_all_leaves, can_modify_approved_leaves, can_adjust_balances, can_manage_holidays FROM admin_permissions WHERE employee_id = ?',
+    [user.employee_id]
+  );
+
+  if (permRows && permRows.length > 0) {
+    return {
+      can_manage_admins: Boolean(permRows[0].can_manage_admins),
+      can_view_all_leaves: Boolean(permRows[0].can_view_all_leaves),
+      can_modify_approved_leaves: Boolean(permRows[0].can_modify_approved_leaves),
+      can_adjust_balances: Boolean(permRows[0].can_adjust_balances),
+      can_manage_holidays: Boolean(permRows[0].can_manage_holidays),
+    };
+  }
+
+  return {
+    can_manage_admins: false,
+    can_view_all_leaves: true,
+    can_modify_approved_leaves: user.role === 'admin_1' || user.role === 'admin',
+    can_adjust_balances: user.role === 'admin_1',
+    can_manage_holidays: user.role === 'admin_1' || user.role === 'admin',
+  };
+};
 
 // Login route - authenticate with employee_id/email and password
 router.post('/login', async (req, res) => {
@@ -37,6 +74,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: "false", message: 'Invalid credentials' });
     }
 
+    const permissions = await getPermissionsForUser(user);
+
     const token = jwt.sign(
       { id: user.id, employee_id: user.employee_id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
@@ -54,7 +93,8 @@ router.post('/login', async (req, res) => {
           name: user.name,
           email: user.email,
           designation: user.designation,
-          role: user.role
+          role: user.role,
+          permissions
         }
       }
     });
@@ -157,7 +197,14 @@ router.post('/forgot-password', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   try {
     const [users] = await db.query('SELECT id, employee_id, name, email, designation, role FROM employees WHERE id = ?', [req.user.id]);
-    res.json({ success: "true", message: "User info fetched", data: users[0] });
+    if (!users || users.length === 0) {
+      return res.status(404).json({ success: "false", message: "User not found" });
+    }
+    const userData = {
+      ...users[0],
+      permissions: req.user.permissions || {}
+    };
+    res.json({ success: "true", message: "User info fetched", data: userData });
   } catch (error) {
     res.status(500).json({ success: "false", message: 'Server error' });
   }
