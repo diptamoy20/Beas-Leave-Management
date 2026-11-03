@@ -58,7 +58,7 @@ export const register = createAsyncThunk('auth/register', async (userData, { rej
 export const fetchCurrentUser = createAsyncThunk('auth/fetchCurrentUser', async (_, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    if (!token) return null;
+    if (!token || token === 'undefined') return null;
     const response = await axios.get('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -83,7 +83,11 @@ const authSlice = createSlice({
   reducers: {
     setUser: (state, action) => {
       state.user = action.payload;
-      localStorage.setItem('user', JSON.stringify(action.payload));
+      if (action.payload) {
+        localStorage.setItem('user', JSON.stringify(action.payload));
+      } else {
+        localStorage.removeItem('user');
+      }
     },
     logout: (state) => {
       state.user = null;
