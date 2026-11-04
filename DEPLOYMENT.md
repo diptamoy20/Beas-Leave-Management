@@ -52,15 +52,16 @@
 
 ---
 
-## Option 4: Netlify (Frontend) + Railway (Backend)
+## Option 4: Netlify (Frontend) + Render (Backend)
 
 ### Frontend on Netlify:
-1. Go to https://netlify.com
-2. Drag and drop the `client/build` folder
-3. Or connect GitHub repo
+1. Go to https://netlify.com and connect your GitHub repository.
+2. Netlify uses `netlify.toml` to build the `client` directory and publish `client/build`.
+3. Deploy the backend on Render using the repository's `render.yaml` blueprint. Its service name is `beas-leave-management`.
+4. The Netlify `/api/*` redirect proxies requests to `https://beas-leave-management.onrender.com`. If Render assigns your service a different URL, update the redirect target in `netlify.toml` to match.
 
-### Backend on Railway:
-Same as Option 2
+### Backend on Render:
+Follow Option 1 to deploy the backend service.
 
 ---
 
