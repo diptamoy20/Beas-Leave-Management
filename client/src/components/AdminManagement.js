@@ -5,6 +5,7 @@ import {
   FiShield,
   FiUsers,
   FiUserPlus,
+  FiUser,
   FiEdit2,
   FiTrash2,
   FiCheck,
@@ -21,33 +22,27 @@ import '../assets/css/EmployeeLeaveHistory.css';
 const ROLE_METADATA = {
   super_admin: {
     label: 'Super Admin',
-    desc: 'Highest Access Level (Manages Admins, Full Leave Oversight)',
+    desc: 'Highest Access Level (Manages Admins & System Access)',
     bg: '#6f42c1',
     badgeClass: 'badge-super-admin',
   },
-  admin_1: {
-    label: 'Admin 1 (Senior)',
-    desc: 'Senior Administrator (Full Oversight & Approved Leave Modification)',
-    bg: '#0d6efd',
-    badgeClass: 'badge-admin-1',
-  },
-  admin_2: {
-    label: 'Admin 2 (Intermediate)',
-    desc: 'Intermediate Administrator (Leave Oversight & Operations)',
-    bg: '#0dcaf0',
-    badgeClass: 'badge-admin-2',
-  },
-  admin_3: {
-    label: 'Admin 3 (Junior)',
-    desc: 'Junior Administrator (Read-Only Leave & Employee Records)',
-    bg: '#6c757d',
-    badgeClass: 'badge-admin-3',
-  },
   admin: {
-    label: 'Admin (Legacy)',
-    desc: 'Standard Administrator',
-    bg: '#198754',
-    badgeClass: 'badge-admin-legacy',
+    label: 'Admin',
+    desc: 'Administrator (Operations & Leave Management)',
+    bg: '#0d6efd',
+    badgeClass: 'badge-admin',
+  },
+  manager: {
+    label: 'Manager',
+    desc: 'Team Manager (Approves Team Leave Requests & Comp-Off)',
+    bg: '#0dcaf0',
+    badgeClass: 'badge-manager',
+  },
+  employee: {
+    label: 'Employee',
+    desc: 'Standard Employee (Applies for Leaves & Attendance)',
+    bg: '#6c757d',
+    badgeClass: 'badge-employee',
   }
 };
 
@@ -59,23 +54,23 @@ const DEFAULT_PERMISSIONS = {
     can_adjust_balances: true,
     can_manage_holidays: true,
   },
-  admin_1: {
+  admin: {
     can_manage_admins: false,
     can_view_all_leaves: true,
     can_modify_approved_leaves: true,
     can_adjust_balances: true,
     can_manage_holidays: true,
   },
-  admin_2: {
+  manager: {
     can_manage_admins: false,
-    can_view_all_leaves: true,
+    can_view_all_leaves: false,
     can_modify_approved_leaves: false,
     can_adjust_balances: false,
     can_manage_holidays: false,
   },
-  admin_3: {
+  employee: {
     can_manage_admins: false,
-    can_view_all_leaves: true,
+    can_view_all_leaves: false,
     can_modify_approved_leaves: false,
     can_adjust_balances: false,
     can_manage_holidays: false,
@@ -95,8 +90,8 @@ const AdminManagement = () => {
   const [empSearch, setEmpSearch] = useState('');
   const [empLoading, setEmpLoading] = useState(false);
   const [selectedEmp, setSelectedEmp] = useState('');
-  const [newRole, setNewRole] = useState('admin_2');
-  const [newPermissions, setNewPermissions] = useState(DEFAULT_PERMISSIONS.admin_2);
+  const [newRole, setNewRole] = useState('admin');
+  const [newPermissions, setNewPermissions] = useState(DEFAULT_PERMISSIONS.admin);
   const [submittingAssign, setSubmittingAssign] = useState(false);
 
   // Edit Admin Modal State
@@ -111,6 +106,8 @@ const AdminManagement = () => {
   const [adminToDemote, setAdminToDemote] = useState(null);
   const [submittingDemote, setSubmittingDemote] = useState(false);
 
+  const [roleCounts, setRoleCounts] = useState({ super: 0, admin: 0, manager: 0, employee: 0, total: 0 });
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     return { Authorization: `Bearer ${token}` };
@@ -122,6 +119,9 @@ const AdminManagement = () => {
     try {
       const res = await axios.get('/api/admin/admins', { headers: getAuthHeaders() });
       setAdmins(res.data.data?.admins || []);
+      if (res.data.data?.counts) {
+        setRoleCounts(res.data.data.counts);
+      }
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || 'Failed to fetch admin list');
@@ -157,7 +157,7 @@ const AdminManagement = () => {
 
   const handleRoleChangeForNew = (role) => {
     setNewRole(role);
-    setNewPermissions(DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.admin_3);
+    setNewPermissions(DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.admin);
   };
 
   const handleRoleChangeForEdit = (role) => {
@@ -267,13 +267,13 @@ const AdminManagement = () => {
 
   const stats = useMemo(() => {
     return {
-      total: admins.length,
-      super: admins.filter((a) => a.role === 'super_admin').length,
-      admin1: admins.filter((a) => a.role === 'admin_1').length,
-      admin2: admins.filter((a) => a.role === 'admin_2').length,
-      admin3: admins.filter((a) => a.role === 'admin_3' || a.role === 'admin').length,
+      total: roleCounts.total || admins.length,
+      super: roleCounts.super || admins.filter((a) => a.role === 'super_admin').length,
+      admin: roleCounts.admin || admins.filter((a) => a.role === 'admin').length,
+      manager: roleCounts.manager || admins.filter((a) => a.role === 'manager').length,
+      employee: roleCounts.employee || 0,
     };
-  }, [admins]);
+  }, [admins, roleCounts]);
 
   return (
     <div className="elh-wrapper">
@@ -285,10 +285,10 @@ const AdminManagement = () => {
           </div>
           <h1 className="elh-page-title">
             <FiShield style={{ marginRight: '10px', color: '#6f42c1' }} />
-            Admin Hierarchy & Access Control
+            Hierarchy & Access Control
           </h1>
           <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>
-            Manage Super Admin privileges and configure granular subordinate Admin permissions (Admin 1, 2, 3).
+            Manage Super Admin, Admin, and Manager privileges and configure granular administrator permissions.
           </p>
         </div>
         <div className="d-flex gap-2">
@@ -300,13 +300,13 @@ const AdminManagement = () => {
             variant="primary"
             onClick={() => {
               setShowAssignModal(true);
-              setNewRole('admin_2');
-              setNewPermissions(DEFAULT_PERMISSIONS.admin_2);
+              setNewRole('admin');
+              setNewPermissions(DEFAULT_PERMISSIONS.admin);
               setSelectedEmp('');
             }}
             style={{ backgroundColor: '#6f42c1', borderColor: '#6f42c1' }}
           >
-            <FiUserPlus style={{ marginRight: '6px' }} /> Assign Admin
+            <FiUserPlus style={{ marginRight: '6px' }} /> Assign Role
           </Button>
         </div>
       </div>
@@ -325,7 +325,7 @@ const AdminManagement = () => {
 
       {/* Hierarchy Stats Cards */}
       <div className="row g-3 mb-4">
-        <div className="col-12 col-sm-6 col-lg-3">
+        <div className="col-12 col-sm-6 col-xl-3">
           <div className="card shadow-sm border-0 h-100 p-3" style={{ borderLeft: '4px solid #6f42c1' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
@@ -340,13 +340,13 @@ const AdminManagement = () => {
           </div>
         </div>
 
-        <div className="col-12 col-sm-6 col-lg-3">
+        <div className="col-12 col-sm-6 col-xl-3">
           <div className="card shadow-sm border-0 h-100 p-3" style={{ borderLeft: '4px solid #0d6efd' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <span className="text-muted small text-uppercase fw-bold">Admin 1</span>
-                <h3 className="mb-0 mt-1 fw-bold text-primary">{stats.admin1}</h3>
-                <small className="text-muted">Senior Ops / Modify</small>
+                <span className="text-muted small text-uppercase fw-bold">Admin</span>
+                <h3 className="mb-0 mt-1 fw-bold text-primary">{stats.admin}</h3>
+                <small className="text-muted">Operations & Permissions</small>
               </div>
               <div className="p-3 rounded-circle bg-primary-subtle">
                 <FiShield size={24} className="text-primary" />
@@ -355,13 +355,13 @@ const AdminManagement = () => {
           </div>
         </div>
 
-        <div className="col-12 col-sm-6 col-lg-3">
+        <div className="col-12 col-sm-6 col-xl-3">
           <div className="card shadow-sm border-0 h-100 p-3" style={{ borderLeft: '4px solid #0dcaf0' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <span className="text-muted small text-uppercase fw-bold">Admin 2</span>
-                <h3 className="mb-0 mt-1 fw-bold text-info">{stats.admin2}</h3>
-                <small className="text-muted">Intermediate Tier</small>
+                <span className="text-muted small text-uppercase fw-bold">Manager</span>
+                <h3 className="mb-0 mt-1 fw-bold text-info">{stats.manager}</h3>
+                <small className="text-muted">Team Approvals & Leaves</small>
               </div>
               <div className="p-3 rounded-circle bg-info-subtle">
                 <FiUsers size={24} className="text-info" />
@@ -370,16 +370,16 @@ const AdminManagement = () => {
           </div>
         </div>
 
-        <div className="col-12 col-sm-6 col-lg-3">
+        <div className="col-12 col-sm-6 col-xl-3">
           <div className="card shadow-sm border-0 h-100 p-3" style={{ borderLeft: '4px solid #6c757d' }}>
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <span className="text-muted small text-uppercase fw-bold">Admin 3</span>
-                <h3 className="mb-0 mt-1 fw-bold text-secondary">{stats.admin3}</h3>
-                <small className="text-muted">Junior / Read-Only</small>
+                <span className="text-muted small text-uppercase fw-bold">Employee</span>
+                <h3 className="mb-0 mt-1 fw-bold text-secondary">{stats.employee}</h3>
+                <small className="text-muted">Standard Team Members</small>
               </div>
               <div className="p-3 rounded-circle bg-secondary-subtle">
-                <FiSliders size={24} className="text-secondary" />
+                <FiUser size={24} className="text-secondary" />
               </div>
             </div>
           </div>
@@ -389,7 +389,7 @@ const AdminManagement = () => {
       {/* Main Table Card */}
       <div className="card shadow-sm border-0">
         <div className="card-header bg-white border-bottom py-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
-          <h5 className="mb-0 fw-bold">Active Administrators ({filteredAdmins.length})</h5>
+          <h5 className="mb-0 fw-bold">Active Privileged Users ({filteredAdmins.length})</h5>
           <div style={{ maxWidth: '300px', width: '100%' }}>
             <div className="input-group">
               <span className="input-group-text bg-light border-end-0">
@@ -397,7 +397,7 @@ const AdminManagement = () => {
               </span>
               <Form.Control
                 type="text"
-                placeholder="Search admin by name, ID..."
+                placeholder="Search by name, ID..."
                 className="border-start-0"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -410,7 +410,7 @@ const AdminManagement = () => {
           <table className="table table-hover align-middle mb-0">
             <thead className="table-light">
               <tr>
-                <th>Admin User</th>
+                <th>User</th>
                 <th>Designation</th>
                 <th>Role Tier</th>
                 <th>Permissions Matrix</th>
@@ -433,7 +433,7 @@ const AdminManagement = () => {
                 </tr>
               ) : (
                 filteredAdmins.map((admin) => {
-                  const roleMeta = ROLE_METADATA[admin.role] || ROLE_METADATA.admin_3;
+                  const roleMeta = ROLE_METADATA[admin.role] || ROLE_METADATA.admin;
                   return (
                     <tr key={admin.employee_id}>
                       <td>
@@ -475,17 +475,10 @@ const AdminManagement = () => {
                         <div className="d-flex flex-wrap gap-1" style={{ maxWidth: '380px' }}>
                           {admin.role === 'super_admin' ? (
                             <Badge bg="dark" className="p-1 px-2">
-                              ⭐ Full System Rights
+                              ⭐ Full System Rights (Super Admin)
                             </Badge>
                           ) : (
                             <>
-                              <Badge
-                                bg={admin.permissions?.can_manage_admins ? 'success' : 'light'}
-                                text={admin.permissions?.can_manage_admins ? 'white' : 'muted'}
-                                className="border"
-                              >
-                                {admin.permissions?.can_manage_admins ? <FiCheck /> : <FiX />} Manage Admins
-                              </Badge>
                               <Badge
                                 bg={admin.permissions?.can_view_all_leaves ? 'success' : 'light'}
                                 text={admin.permissions?.can_view_all_leaves ? 'white' : 'muted'}
@@ -506,6 +499,13 @@ const AdminManagement = () => {
                                 className="border"
                               >
                                 {admin.permissions?.can_adjust_balances ? <FiCheck /> : <FiX />} Adjust Balances
+                              </Badge>
+                              <Badge
+                                bg={admin.permissions?.can_manage_holidays ? 'secondary' : 'light'}
+                                text={admin.permissions?.can_manage_holidays ? 'white' : 'muted'}
+                                className="border"
+                              >
+                                {admin.permissions?.can_manage_holidays ? <FiCheck /> : <FiX />} Manage Holidays
                               </Badge>
                             </>
                           )}
@@ -584,13 +584,13 @@ const AdminManagement = () => {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label className="fw-semibold">2. Choose Admin Tier</Form.Label>
+              <Form.Label className="fw-semibold">2. Choose Role to Assign</Form.Label>
               <div className="row g-2">
-                {['admin_1', 'admin_2', 'admin_3', 'super_admin'].map((roleKey) => {
+                {['employee', 'manager', 'admin', 'super_admin'].map((roleKey) => {
                   const meta = ROLE_METADATA[roleKey];
                   const isSelected = newRole === roleKey;
                   return (
-                    <div key={roleKey} className="col-12 col-md-6">
+                    <div key={roleKey} className="col-12 col-md-6 col-lg-3">
                       <div
                         onClick={() => handleRoleChangeForNew(roleKey)}
                         className={`p-3 rounded border cursor-pointer h-100 ${
@@ -664,15 +664,6 @@ const AdminManagement = () => {
                   }
                   className="mb-2"
                 />
-                {newRole === 'super_admin' && (
-                  <Form.Check
-                    type="checkbox"
-                    id="perm_manage_admins"
-                    label="Can Manage Subordinate Admins (Super Admin only)"
-                    checked={true}
-                    disabled
-                  />
-                )}
               </div>
             </Form.Group>
           </Modal.Body>
@@ -697,16 +688,15 @@ const AdminManagement = () => {
         <Form onSubmit={handleEditSubmit}>
           <Modal.Body>
             <Form.Group className="mb-3">
-              <Form.Label className="fw-semibold">Admin Tier</Form.Label>
+              <Form.Label className="fw-semibold">Role Tier</Form.Label>
               <Form.Select
                 value={editRole}
                 onChange={(e) => handleRoleChangeForEdit(e.target.value)}
               >
                 <option value="super_admin">Super Admin (Highest Authority)</option>
-                <option value="admin_1">Admin 1 (Senior Administrator)</option>
-                <option value="admin_2">Admin 2 (Intermediate Administrator)</option>
-                <option value="admin_3">Admin 3 (Junior Administrator)</option>
-                <option value="admin">Admin (Legacy)</option>
+                <option value="admin">Admin (Administrator)</option>
+                <option value="manager">Manager (Team Leaves & Approvals)</option>
+                <option value="employee">Employee (Standard Access)</option>
               </Form.Select>
               <Form.Text className="text-muted">
                 {ROLE_METADATA[editRole]?.desc}
@@ -779,15 +769,6 @@ const AdminManagement = () => {
                   }
                   className="mb-2"
                 />
-                {editRole === 'super_admin' && (
-                  <Form.Check
-                    type="checkbox"
-                    id="edit_manage_admins"
-                    label="Can Manage Subordinate Admins"
-                    checked={true}
-                    disabled
-                  />
-                )}
               </div>
             </Form.Group>
           </Modal.Body>

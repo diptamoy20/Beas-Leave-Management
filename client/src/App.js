@@ -16,7 +16,9 @@ import ManageLeaves from './components/ManageLeaves';
 import LeaveRecords from './components/LeaveRecords';
 import AdminManagement from './components/AdminManagement';
 import ApprovedLeavesReview from './components/ApprovedLeavesReview';
-import CompOffManagement from './components/CompOffManagement';
+import MyCompOff from './components/MyCompOff';
+import ApplyCompOff from './components/ApplyCompOff';
+import EmployeeCompOff from './components/EmployeeCompOff';
 import ClientMeetings from './components/ClientMeetings';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/theme.css';
@@ -75,13 +77,30 @@ function App() {
                       <Route path="/holidays" element={<Holidays />} />
                       <Route path="/leave-balance" element={<LeaveBalance />} />
                       <Route path="/manage-leaves" element={<ManageLeaves />} />
-                      <Route path="/leave-records" element={<LeaveRecords />} />
-                      <Route path="/comp-off" element={<CompOffManagement />} />
+                      <Route
+                        path="/leave-records"
+                        element={
+                          <RoleRoute allowedRoles={['super_admin', 'admin', 'manager']}>
+                            <LeaveRecords />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route path="/comp-off" element={<Navigate to="/my-comp-off" />} />
+                      <Route path="/apply-comp-off" element={<ApplyCompOff />} />
+                      <Route path="/my-comp-off" element={<MyCompOff />} />
+                      <Route
+                        path="/employee-comp-off"
+                        element={
+                          <RoleRoute allowedRoles={['super_admin', 'admin', 'manager']}>
+                            <EmployeeCompOff />
+                          </RoleRoute>
+                        }
+                      />
                       <Route path="/client-meetings" element={<ClientMeetings />} />
                       <Route
                         path="/admin-management"
                         element={
-                          <RoleRoute allowedRoles={['super_admin']} requiredPermission="can_manage_admins">
+                          <RoleRoute allowedRoles={['super_admin']}>
                             <AdminManagement />
                           </RoleRoute>
                         }
@@ -90,7 +109,7 @@ function App() {
                         path="/approved-leaves-review"
                         element={
                           <RoleRoute
-                            allowedRoles={['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3']}
+                            allowedRoles={['super_admin', 'admin']}
                             requiredPermission="can_view_all_leaves"
                           >
                             <ApprovedLeavesReview />

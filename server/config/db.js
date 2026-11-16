@@ -45,6 +45,7 @@ async function initializeDatabase() {
         end_date DATE NOT NULL,
         reason TEXT,
         status VARCHAR(50) DEFAULT 'Pending',
+        comp_off_used DECIMAL(5,1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
       )
@@ -206,6 +207,11 @@ async function initializeDatabase() {
     const [requestColumns] = await connection.query("SHOW COLUMNS FROM leave_requests");
     const requestColNames = requestColumns.map(col => col.Field);
 
+    if (!requestColNames.includes('comp_off_used')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN comp_off_used DECIMAL(5,1) NOT NULL DEFAULT 0');
+      console.log('✅ Added leave_requests.comp_off_used column');
+    }
+
     if (!requestColNames.includes('duration')) {
       await connection.query("ALTER TABLE leave_requests ADD COLUMN duration VARCHAR(50) DEFAULT 'Full Day'");
       console.log('✅ Added leave_requests.duration column');
@@ -363,18 +369,13 @@ async function initializeDatabase() {
       )
     `);
 
-    // Seed roles (including Super Admin, Admin 1, Admin 2, Admin 3)
+    // Seed roles (Super Admin, Admin, Manager, Employee)
     await connection.query(`
       INSERT IGNORE INTO roles (name, description) VALUES
       ('employee', 'Regular Employee'),
       ('manager', 'Manager'),
-      ('admin', 'Administrator (Legacy)'),
-      ('super_admin', 'Super Administrator - Highest Access Level'),
-      ('admin_1', 'Admin 1 - Senior Administrator with broad permissions'),
-      ('admin_2', 'Admin 2 - Intermediate Administrator'),
-      ('admin_3', 'Admin 3 - Junior Administrator with view access'),
-      ('hr', 'Human Resources'),
-      ('ceo', 'Chief Executive Officer')
+      ('admin', 'Administrator'),
+      ('super_admin', 'Super Administrator - Highest Access Level')
     `);
 
     // Create client_meetings table

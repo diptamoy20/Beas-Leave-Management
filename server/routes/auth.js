@@ -37,9 +37,9 @@ const getPermissionsForUser = async (user) => {
   return {
     can_manage_admins: false,
     can_view_all_leaves: true,
-    can_modify_approved_leaves: user.role === 'admin_1' || user.role === 'admin',
-    can_adjust_balances: user.role === 'admin_1',
-    can_manage_holidays: user.role === 'admin_1' || user.role === 'admin',
+    can_modify_approved_leaves: true,
+    can_adjust_balances: true,
+    can_manage_holidays: true,
   };
 };
 
@@ -48,10 +48,17 @@ router.post('/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
     
-    // Check if identifier is email or employee_id
+    const cleanIdentifier = (identifier || '').toString().trim();
+    const cleanIdWithoutHash = cleanIdentifier.replace(/^#/, '').trim();
+    
+    if (!cleanIdentifier || !password) {
+      return res.status(400).json({ success: "false", message: 'Please provide both identifier and password' });
+    }
+
+    // Check if identifier is email or employee_id (case-insensitive and whitespace-tolerant, with or without '#')
     const [users] = await db.query(
-      'SELECT * FROM employees WHERE email = ? OR employee_id = ?',
-      [identifier, identifier]
+      'SELECT * FROM employees WHERE LOWER(TRIM(email)) = LOWER(?) OR employee_id = ? OR employee_id = ?',
+      [cleanIdentifier, cleanIdentifier, cleanIdWithoutHash]
     );
     
     if (users.length === 0) {
@@ -62,10 +69,10 @@ router.post('/login', async (req, res) => {
     
     // Check if password is hashed or plain text
     let isMatch = false;
-    if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+    if (user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'))) {
       // Password is hashed
       isMatch = await bcrypt.compare(password, user.password);
-    } else {
+    } else if (user.password) {
       // Password is plain text (for existing data)
       isMatch = password === user.password;
     }
@@ -79,7 +86,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, employee_id: user.employee_id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' }
     );
 
     res.json({

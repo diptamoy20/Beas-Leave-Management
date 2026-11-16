@@ -10,7 +10,8 @@ router.get('/', auth, async (req, res) => {
     let params = [];
     const conditions = [];
 
-    if (req.user.role !== 'manager' && req.user.role !== 'admin') {
+    const isPrivileged = req.user.role === 'manager' || req.user.role === 'admin' || req.user.role === 'super_admin';
+    if (!isPrivileged) {
       conditions.push("e.role = ?");
       params.push('manager');
     }

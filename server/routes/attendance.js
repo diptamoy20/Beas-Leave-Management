@@ -490,7 +490,7 @@ router.post('/waive-off/request', auth, async (req, res) => {
     const callerEmpId = req.user.employee_id;
     const isCallerManager =
       req.user.role === 'manager' ||
-      ['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3'].includes(req.user.role);
+      ['super_admin', 'admin'].includes(req.user.role);
 
     let { employee_id, date, waive_off_type, proposed_clock_in, proposed_clock_out, reason } = req.body;
 

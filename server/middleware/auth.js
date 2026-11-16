@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 
-const ADMIN_ROLES = ['super_admin', 'admin_1', 'admin_2', 'admin_3', 'admin'];
+const ADMIN_ROLES = ['super_admin', 'admin'];
 
 const auth = async (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -49,13 +49,13 @@ const auth = async (req, res, next) => {
             can_manage_holidays: Boolean(permRows[0].can_manage_holidays),
           };
         } else {
-          // Default fallback permissions based on tier
+          // Default fallback permissions
           req.user.permissions = {
             can_manage_admins: false,
             can_view_all_leaves: true,
-            can_modify_approved_leaves: req.user.role === 'admin_1' || req.user.role === 'admin',
-            can_adjust_balances: req.user.role === 'admin_1',
-            can_manage_holidays: req.user.role === 'admin_1' || req.user.role === 'admin',
+            can_modify_approved_leaves: true,
+            can_adjust_balances: true,
+            can_manage_holidays: true,
           };
         }
       }
@@ -65,6 +65,9 @@ const auth = async (req, res, next) => {
 
     next();
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ success: 'false', message: 'Token has expired', expired: true });
+    }
     res.status(401).json({ success: 'false', message: 'Token is not valid' });
   }
 };

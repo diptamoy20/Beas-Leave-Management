@@ -35,7 +35,7 @@ const Attendance = () => {
   const { user } = useSelector((state) => state.auth);
   const isManagerOrAdmin =
     user?.role === 'manager' ||
-    ['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3'].includes(user?.role);
+    ['super_admin', 'admin'].includes(user?.role);
 
   const [activeTab, setActiveTab] = useState('attendance'); // 'attendance', 'my_waiveoffs', 'approvals', 'audit'
   const [attendance, setAttendance] = useState([]);
