@@ -177,23 +177,39 @@ async function syncFromDevices() {
     try {
       deviceLogs = await fetchAttendancesFromDevice(ip);
       console.log(`[DEVICE SYNC] Device ${ip}: fetched ${deviceLogs.length} records`);
+
+      // Diagnostic: log the date range of records returned by the device
+      if (deviceLogs.length > 0) {
+        const timestamps = deviceLogs
+          .map((r) => extractTimestamp(r))
+          .filter(Boolean)
+          .sort((a, b) => a - b);
+        if (timestamps.length > 0) {
+          console.log(`[DEVICE SYNC] Device ${ip}: date range = ${toMySqlDate(timestamps[0])} to ${toMySqlDate(timestamps[timestamps.length - 1])}`);
+          console.log(`[DEVICE SYNC] Device ${ip}: lookback cutoff = ${toMySqlDate(lookbackFrom)}, today = ${toMySqlDate(new Date())}`);
+        }
+        // Log a sample of the first raw record to help debug field names
+        console.log(`[DEVICE SYNC] Device ${ip}: sample record keys =`, Object.keys(deviceLogs[0]));
+      }
     } catch (err) {
       console.error(`Attendance sync: failed to fetch logs from device ${ip}`, err?.message || err);
       continue;
     }
 
+    let skippedNoId = 0, skippedOld = 0, processed = 0;
     for (const record of deviceLogs) {
       const deviceEmployeeId = extractEmployeeDeviceId(record);
       const ts = extractTimestamp(record);
 
       if (deviceEmployeeId == null || !ts) {
-        console.log(`[DEVICE RECORD] ❌ SKIPPED: Missing ID or timestamp`);
+        skippedNoId++;
         continue;
       }
       if (ts < lookbackFrom) {
-        console.log(`[DEVICE RECORD] ❌ SKIPPED: Too old (before ${lookbackFrom.toISOString()})`);
+        skippedOld++;
         continue;
       }
+      processed++;
 
       const employeeId = employeeIdToDeviceId.get(String(deviceEmployeeId));
       if (!employeeId) {
@@ -212,15 +228,17 @@ async function syncFromDevices() {
         if (ts > existing.clockOutDate) existing.clockOutDate = ts;
       }
     }
+    console.log(`[DEVICE SYNC] Device ${ip}: processed=${processed}, skippedOld=${skippedOld}, skippedNoId=${skippedNoId}`);
   }
 
   // Upsert merged values into DB
+  console.log(`[DEVICE SYNC] Upserting ${groups.size} employee-date groups into attendance table`);
   for (const entry of groups.values()) {
     await upsertAttendanceMerged(entry);
   }
 
-  // Clean up old attendance records (keep only last 10 days)
-  await db.query('DELETE FROM attendance WHERE date < DATE_SUB(CURDATE(), INTERVAL 10 DAY)');
+  // Clean up old attendance records — match LOOKBACK_DAYS so synced data isn't immediately deleted
+  await db.query(`DELETE FROM attendance WHERE date < DATE_SUB(CURDATE(), INTERVAL ${LOOKBACK_DAYS} DAY)`);
 }
 
 function startAttendanceDeviceSync() {

@@ -79,7 +79,7 @@ async function initializeDatabase() {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS attendance (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        employee_id INT NOT NULL,
+        employee_id VARCHAR(255) NOT NULL,
         date DATE NOT NULL,
         clock_in DATETIME,
         clock_out DATETIME,
@@ -97,6 +97,30 @@ async function initializeDatabase() {
     if (!attendanceColumns || attendanceColumns.length === 0) {
       await connection.query('ALTER TABLE attendance ADD COLUMN total_time INT DEFAULT NULL');
       console.log('✅ Added attendance.total_time column');
+    }
+
+    // Ensure attendance.employee_id is VARCHAR(255) to match employees.employee_id
+    try {
+      const [attEmpCol] = await connection.query("SHOW COLUMNS FROM attendance LIKE 'employee_id'");
+      if (attEmpCol && attEmpCol.length > 0 && attEmpCol[0].Type.toLowerCase().includes('int')) {
+        // Drop foreign key first (name may vary; try common conventions)
+        const [fkRows] = await connection.query(`
+          SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'attendance'
+            AND COLUMN_NAME = 'employee_id'
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+        `);
+        for (const fk of fkRows) {
+          await connection.query(`ALTER TABLE attendance DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+          console.log(`✅ Dropped FK ${fk.CONSTRAINT_NAME} from attendance`);
+        }
+        await connection.query('ALTER TABLE attendance MODIFY employee_id VARCHAR(255) NOT NULL');
+        await connection.query('ALTER TABLE attendance ADD CONSTRAINT fk_attendance_employee FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE CASCADE');
+        console.log('✅ Migrated attendance.employee_id from INT to VARCHAR(255)');
+      }
+    } catch (e) {
+      console.warn('Could not migrate attendance.employee_id type:', e.message || e);
     }
 
     // Ensure designation column exists for existing installs and migrate data

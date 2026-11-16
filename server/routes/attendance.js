@@ -55,6 +55,19 @@ function parseDateOnly(value) {
   return new Date(year, month - 1, day);
 }
 
+function toMySqlDateTime(d) {
+  if (!d) return null;
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const mi = String(dt.getMinutes()).padStart(2, '0');
+  const ss = String(dt.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+}
+
 function getAttendanceDateKey(attendanceRow) {
   if (attendanceRow?.clock_in) return formatDateLocal(attendanceRow.clock_in);
   if (attendanceRow?.clock_out) return formatDateLocal(attendanceRow.clock_out);
@@ -70,7 +83,8 @@ function getAttendanceDateKey(attendanceRow) {
 
 router.post('/clock-in', auth, async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = formatDateLocal(now);
 
     // Get employee_id from employees table
     const [empData] = await db.query('SELECT employee_id FROM employees WHERE id = ?', [req.user.id]);
@@ -86,7 +100,7 @@ router.post('/clock-in', auth, async (req, res) => {
       return res.status(400).json({ success: "false", message: 'Already clocked in today' });
     }
 
-    const clockInTime = new Date().toISOString();
+    const clockInTime = toMySqlDateTime(now);
     await db.run(
       'INSERT INTO attendance (employee_id, date, clock_in, total_time) VALUES (?, ?, ?, NULL)',
       [employeeId, today, clockInTime]
@@ -100,7 +114,8 @@ router.post('/clock-in', auth, async (req, res) => {
 
 router.post('/clock-out', auth, async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = formatDateLocal(now);
 
     // Get employee_id from employees table
     const [empData] = await db.query('SELECT employee_id FROM employees WHERE id = ?', [req.user.id]);
@@ -120,7 +135,7 @@ router.post('/clock-out', auth, async (req, res) => {
       return res.status(400).json({ success: "false", message: 'Already clocked out today' });
     }
 
-    const clockOutTime = new Date().toISOString();
+    const clockOutTime = toMySqlDateTime(now);
     await db.run(
       `
       UPDATE attendance
