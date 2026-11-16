@@ -25,7 +25,7 @@ const CompOffManagement = () => {
 
   const isManagerOrAdmin =
     user?.role === 'manager' ||
-    ['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3'].includes(user?.role);
+    ['super_admin', 'admin'].includes(user?.role);
 
   const [activeTab, setActiveTab] = useState(isManagerOrAdmin ? 'history' : 'my_history');
   const [loading, setLoading] = useState(true);
@@ -415,20 +415,42 @@ const CompOffManagement = () => {
                         </span>
                       </td>
                       <td>
-                        {h.work_date ? (
-                          <div>
-                            <FiCalendar className="me-1 text-muted" size={13} />
-                            <strong>{h.work_date}</strong>
-                            <small className="d-block text-muted">Weekend/Holiday Work</small>
-                          </div>
-                        ) : h.leave_request_id ? (
-                          <div>
-                            <Badge bg="light" text="dark" className="border">
-                              Leave Request #{h.leave_request_id}
-                            </Badge>
-                          </div>
+                        {h.type === 'CREDIT' ? (
+                          h.work_date ? (
+                            <div>
+                              <FiCalendar className="me-1 text-success" size={13} />
+                              <strong>{h.work_date}</strong>
+                              <small className="d-block text-muted">Weekend/Holiday Work</small>
+                            </div>
+                          ) : (
+                            <div>
+                              <FiCalendar className="me-1 text-muted" size={13} />
+                              <span>{h.created_at}</span>
+                            </div>
+                          )
                         ) : (
-                          <span className="text-muted">—</span>
+                          h.leave_start_date ? (
+                            <div>
+                              <FiCalendar className="me-1 text-danger" size={13} />
+                              <strong>
+                                {h.leave_start_date}
+                                {h.leave_end_date && h.leave_end_date !== h.leave_start_date
+                                  ? ` → ${h.leave_end_date}`
+                                  : ''}
+                              </strong>
+                              <small className="d-block text-muted">
+                                Leave Taken {h.leave_request_id ? `(#${h.leave_request_id})` : ''}
+                              </small>
+                            </div>
+                          ) : h.leave_request_id ? (
+                            <div>
+                              <Badge bg="light" text="dark" className="border">
+                                Leave Request #{h.leave_request_id}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )
                         )}
                       </td>
                       <td>

@@ -70,7 +70,7 @@ Follow Option 1 to deploy the backend service.
 For any platform, set these environment variables:
 
 ```
-PORT=5000
+PORT=5001 (or any free port; Render overrides this in production)
 JWT_SECRET=your_random_secret_key_here
 NODE_ENV=production
 ```

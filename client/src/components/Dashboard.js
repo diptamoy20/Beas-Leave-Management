@@ -203,14 +203,14 @@ const Dashboard = () => {
             <FiPlus size={16} />
             <span>Apply Leave</span>
           </Link>
-          <Link to="/comp-off" className="db-action-btn-secondary">
+          <Link to="/my-comp-off" className="db-action-btn-secondary">
             <FiAward size={16} />
             <span>Comp-Off</span>
           </Link>
           <Link to="/my-leaves" className="db-action-btn-secondary">
             <span>My Leaves</span>
           </Link>
-          {['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3'].includes(user?.role) && (
+          {['super_admin', 'admin', 'manager'].includes(user?.role) && (
             <Link to="/leave-records" className="db-action-btn-secondary">
               <span>Leave Records</span>
             </Link>
@@ -258,7 +258,7 @@ const Dashboard = () => {
         <div
           className="db-kpi-card compoff"
           style={{ cursor: 'pointer' }}
-          onClick={() => navigate('/comp-off')}
+          onClick={() => navigate('/my-comp-off')}
           title="Click to view Comp-Off ledger and balances"
         >
           <div className="db-kpi-icon-wrapper">

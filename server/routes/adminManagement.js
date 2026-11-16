@@ -26,19 +26,27 @@ router.get('/admins', async (req, res) => {
         p.can_manage_holidays
       FROM employees e
       LEFT JOIN admin_permissions p ON e.employee_id = p.employee_id
-      WHERE e.role IN ('super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3')
+      WHERE e.role IN ('super_admin', 'admin', 'manager')
       ORDER BY 
         CASE e.role
           WHEN 'super_admin' THEN 1
-          WHEN 'admin_1' THEN 2
-          WHEN 'admin_2' THEN 3
-          WHEN 'admin_3' THEN 4
-          WHEN 'admin' THEN 5
-          ELSE 6
+          WHEN 'admin' THEN 2
+          WHEN 'manager' THEN 3
+          ELSE 4
         END, e.name ASC
     `;
 
     const [admins] = await db.query(query);
+
+    const [[roleCounts]] = await db.query(`
+      SELECT 
+        SUM(CASE WHEN role = 'super_admin' THEN 1 ELSE 0 END) as super_count,
+        SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) as admin_count,
+        SUM(CASE WHEN role = 'manager' THEN 1 ELSE 0 END) as manager_count,
+        SUM(CASE WHEN role = 'employee' THEN 1 ELSE 0 END) as employee_count,
+        COUNT(*) as total_count
+      FROM employees
+    `);
 
     const formattedAdmins = admins.map(admin => ({
       id: admin.id,
@@ -50,7 +58,7 @@ router.get('/admins', async (req, res) => {
       created_at: admin.created_at,
       permissions: {
         can_manage_admins: admin.role === 'super_admin' ? true : Boolean(admin.can_manage_admins),
-        can_view_all_leaves: admin.role === 'super_admin' ? true : (admin.can_view_all_leaves !== null ? Boolean(admin.can_view_all_leaves) : true),
+        can_view_all_leaves: admin.role === 'super_admin' ? true : (admin.can_view_all_leaves !== null ? Boolean(admin.can_view_all_leaves) : (admin.role === 'admin')),
         can_modify_approved_leaves: admin.role === 'super_admin' ? true : Boolean(admin.can_modify_approved_leaves),
         can_adjust_balances: admin.role === 'super_admin' ? true : Boolean(admin.can_adjust_balances),
         can_manage_holidays: admin.role === 'super_admin' ? true : Boolean(admin.can_manage_holidays),
@@ -60,7 +68,16 @@ router.get('/admins', async (req, res) => {
     res.json({
       success: "true",
       message: "Admin list fetched successfully",
-      data: { admins: formattedAdmins }
+      data: {
+        admins: formattedAdmins,
+        counts: {
+          super: Number(roleCounts?.super_count || 0),
+          admin: Number(roleCounts?.admin_count || 0),
+          manager: Number(roleCounts?.manager_count || 0),
+          employee: Number(roleCounts?.employee_count || 0),
+          total: Number(roleCounts?.total_count || 0)
+        }
+      }
     });
   } catch (error) {
     console.error('Error fetching admins:', error);
@@ -68,14 +85,14 @@ router.get('/admins', async (req, res) => {
   }
 });
 
-// 2. GET /api/admin/eligible-employees - Search employees who are not yet admins
+// 2. GET /api/admin/eligible-employees - Search employees who are not yet super_admin/admin/manager (or regular employees)
 router.get('/eligible-employees', async (req, res) => {
   try {
     const search = req.query.search || '';
     let query = `
       SELECT id, employee_id, name, email, designation, role 
       FROM employees 
-      WHERE role NOT IN ('super_admin', 'admin_1', 'admin_2', 'admin_3')
+      WHERE role NOT IN ('super_admin')
     `;
     const params = [];
 
@@ -99,17 +116,17 @@ router.get('/eligible-employees', async (req, res) => {
   }
 });
 
-// 3. POST /api/admin/admins - Assign an employee to an admin role (with default or customized permissions)
+// 3. POST /api/admin/admins - Assign an employee to an admin/manager role
 router.post('/admins', async (req, res) => {
   try {
-    const { employee_id, role = 'admin_3', permissions = {} } = req.body;
+    const { employee_id, role = 'admin', permissions = {} } = req.body;
 
     if (!employee_id) {
       return res.status(400).json({ success: "false", message: 'employee_id is required' });
     }
 
-    if (!['super_admin', 'admin_1', 'admin_2', 'admin_3', 'admin'].includes(role)) {
-      return res.status(400).json({ success: "false", message: 'Invalid admin role' });
+    if (!['super_admin', 'admin', 'manager', 'employee'].includes(role)) {
+      return res.status(400).json({ success: "false", message: 'Invalid role' });
     }
 
     // Verify employee exists
@@ -122,12 +139,12 @@ router.post('/admins', async (req, res) => {
     await db.run('UPDATE employees SET role = ? WHERE employee_id = ?', [role, employee_id]);
 
     // Setup default permissions based on role tier if not explicitly passed
-    const defaultCanModify = (role === 'super_admin' || role === 'admin_1');
-    const defaultCanAdjust = (role === 'super_admin' || role === 'admin_1');
-    const defaultCanManageHolidays = (role === 'super_admin' || role === 'admin_1');
+    const defaultCanModify = (role === 'super_admin' || role === 'admin');
+    const defaultCanAdjust = (role === 'super_admin' || role === 'admin');
+    const defaultCanManageHolidays = (role === 'super_admin' || role === 'admin');
 
-    const canManageAdmins = role === 'super_admin' ? true : Boolean(permissions.can_manage_admins);
-    const canViewAllLeaves = permissions.can_view_all_leaves !== undefined ? Boolean(permissions.can_view_all_leaves) : true;
+    const canManageAdmins = role === 'super_admin';
+    const canViewAllLeaves = permissions.can_view_all_leaves !== undefined ? Boolean(permissions.can_view_all_leaves) : (role === 'admin' || role === 'super_admin');
     const canModifyApprovedLeaves = permissions.can_modify_approved_leaves !== undefined ? Boolean(permissions.can_modify_approved_leaves) : defaultCanModify;
     const canAdjustBalances = permissions.can_adjust_balances !== undefined ? Boolean(permissions.can_adjust_balances) : defaultCanAdjust;
     const canManageHolidays = permissions.can_manage_holidays !== undefined ? Boolean(permissions.can_manage_holidays) : defaultCanManageHolidays;
@@ -171,14 +188,14 @@ router.post('/admins', async (req, res) => {
   }
 });
 
-// 4. PUT /api/admin/admins/:employeeId/role - Promote/Demote an Admin's tier
+// 4. PUT /api/admin/admins/:employeeId/role - Promote/Demote an Admin's/Manager's role
 router.put('/admins/:employeeId/role', async (req, res) => {
   try {
     const { employeeId } = req.params;
     const { role } = req.body;
 
-    if (!['super_admin', 'admin_1', 'admin_2', 'admin_3', 'admin'].includes(role)) {
-      return res.status(400).json({ success: "false", message: 'Invalid admin role' });
+    if (!['super_admin', 'admin', 'manager', 'employee'].includes(role)) {
+      return res.status(400).json({ success: "false", message: 'Invalid role' });
     }
 
     // Protect against demoting the current Super Admin if they are the only one
@@ -193,7 +210,7 @@ router.put('/admins/:employeeId/role', async (req, res) => {
 
     res.json({
       success: "true",
-      message: `Admin role updated to ${role}`,
+      message: `Role updated to ${role}`,
       data: { employee_id: employeeId, role }
     });
   } catch (error) {

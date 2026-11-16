@@ -51,7 +51,7 @@ cp .env.example .env
 
 3. Update `.env` with your database credentials:
 ```
-PORT=5000
+PORT=5001
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=your_password

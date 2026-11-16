@@ -97,9 +97,14 @@ router.get('/my-summary', auth, async (req, res) => {
     const [historyRows] = await db.query(`
       SELECT 
         h.*,
-        m.name as credited_by_name
+        m.name as credited_by_name,
+        lr.start_date as leave_start_date,
+        lr.end_date as leave_end_date,
+        lr.leave_type as leave_type,
+        lr.duration as leave_duration
       FROM comp_off_history h
       LEFT JOIN employees m ON h.credited_by = m.employee_id
+      LEFT JOIN leave_requests lr ON h.leave_request_id = lr.id
       WHERE h.employee_id = ?
       ORDER BY h.created_at DESC
     `, [employeeId]);
@@ -113,7 +118,99 @@ router.get('/my-summary', auth, async (req, res) => {
       credited_by: h.credited_by,
       credited_by_name: h.credited_by_name || 'System / Admin',
       created_at: toLocalYMD(h.created_at),
-      leave_request_id: h.leave_request_id
+      leave_request_id: h.leave_request_id,
+      leave_start_date: toLocalYMD(h.leave_start_date),
+      leave_end_date: toLocalYMD(h.leave_end_date),
+      leave_type: h.leave_type,
+      leave_duration: h.leave_duration
+    }));
+
+    const totalCredited = formattedHistory
+      .filter(h => h.type === 'CREDIT')
+      .reduce((sum, h) => sum + h.days, 0);
+
+    const totalUsed = formattedHistory
+      .filter(h => h.type === 'DEBIT')
+      .reduce((sum, h) => sum + h.days, 0);
+
+    const [pendingRows] = await db.query(
+      `SELECT id, start_date, end_date, no_of_days, reason, status, duration, created_at
+       FROM leave_requests
+       WHERE employee_id = ? AND (leave_type = 'Compensatory Off' OR duration = 'Compensatory Off') AND status = 'Pending'
+       ORDER BY created_at DESC`,
+      [employeeId]
+    );
+    const pendingDays = pendingRows.reduce((sum, r) => sum + Number(r.no_of_days || 0), 0);
+
+    res.json({
+      success: "true",
+      message: "Comp-off summary fetched",
+      data: {
+        balance,
+        totalCredited,
+        totalUsed,
+        pendingDays,
+        history: formattedHistory,
+        pendingRequests: pendingRows.map(r => ({
+          id: r.id,
+          start_date: toLocalYMD(r.start_date),
+          end_date: toLocalYMD(r.end_date),
+          days: Number(r.no_of_days || 0),
+          reason: r.reason,
+          status: r.status,
+          duration: r.duration,
+          created_at: toLocalYMD(r.created_at)
+        }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
+  }
+});
+
+// 2b. GET /api/comp-off/employee/:employeeId - Specific employee's Comp-Off balance & ledger (Managers & Admins)
+router.get('/employee/:employeeId', auth, isManager, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    const [empRows] = await db.query('SELECT id, employee_id, name, email, designation, role FROM employees WHERE employee_id = ?', [employeeId]);
+    if (empRows.length === 0) {
+      return res.status(404).json({ success: "false", message: 'Employee not found.' });
+    }
+    const employee = empRows[0];
+
+    const [balanceRows] = await db.query('SELECT comp_off FROM leave_balance WHERE employee_id = ?', [employeeId]);
+    const balance = Number(balanceRows[0]?.comp_off || 0);
+
+    const [historyRows] = await db.query(`
+      SELECT 
+        h.*,
+        m.name as credited_by_name,
+        lr.start_date as leave_start_date,
+        lr.end_date as leave_end_date,
+        lr.leave_type as leave_type,
+        lr.duration as leave_duration
+      FROM comp_off_history h
+      LEFT JOIN employees m ON h.credited_by = m.employee_id
+      LEFT JOIN leave_requests lr ON h.leave_request_id = lr.id
+      WHERE h.employee_id = ?
+      ORDER BY h.created_at DESC
+    `, [employeeId]);
+
+    const formattedHistory = historyRows.map(h => ({
+      id: h.id,
+      type: h.type,
+      days: Number(h.days),
+      work_date: toLocalYMD(h.work_date),
+      reason: h.reason,
+      credited_by: h.credited_by,
+      credited_by_name: h.credited_by_name || (h.type === 'DEBIT' ? 'Leave Approval' : 'System'),
+      created_at: toLocalYMD(h.created_at),
+      leave_request_id: h.leave_request_id,
+      leave_start_date: toLocalYMD(h.leave_start_date),
+      leave_end_date: toLocalYMD(h.leave_end_date),
+      leave_type: h.leave_type,
+      leave_duration: h.leave_duration
     }));
 
     const totalCredited = formattedHistory
@@ -126,8 +223,9 @@ router.get('/my-summary', auth, async (req, res) => {
 
     res.json({
       success: "true",
-      message: "Comp-off summary fetched",
+      message: "Employee comp-off summary fetched",
       data: {
+        employee,
         balance,
         totalCredited,
         totalUsed,
@@ -182,7 +280,7 @@ router.get('/balances', auth, isManager, async (req, res) => {
 // 4. GET /api/comp-off/history - Global or employee-specific credit/debit audit history
 router.get('/history', auth, async (req, res) => {
   try {
-    const isMgrOrAdmin = req.user.role === 'manager' || ['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3'].includes(req.user.role);
+    const isMgrOrAdmin = req.user.role === 'manager' || ['super_admin', 'admin'].includes(req.user.role);
     const filterEmployeeId = req.query.employee_id;
     const search = req.query.search || '';
 
@@ -191,10 +289,15 @@ router.get('/history', auth, async (req, res) => {
         h.*,
         e.name as employee_name,
         e.designation as employee_designation,
-        m.name as credited_by_name
+        m.name as credited_by_name,
+        lr.start_date as leave_start_date,
+        lr.end_date as leave_end_date,
+        lr.leave_type as leave_type,
+        lr.duration as leave_duration
       FROM comp_off_history h
       JOIN employees e ON h.employee_id = e.employee_id
       LEFT JOIN employees m ON h.credited_by = m.employee_id
+      LEFT JOIN leave_requests lr ON h.leave_request_id = lr.id
     `;
 
     const conditions = [];
@@ -235,6 +338,10 @@ router.get('/history', auth, async (req, res) => {
       credited_by: h.credited_by,
       credited_by_name: h.credited_by_name || (h.type === 'DEBIT' ? 'Leave Approval' : 'System'),
       leave_request_id: h.leave_request_id,
+      leave_start_date: toLocalYMD(h.leave_start_date),
+      leave_end_date: toLocalYMD(h.leave_end_date),
+      leave_type: h.leave_type,
+      leave_duration: h.leave_duration,
       created_at: toLocalYMD(h.created_at)
     }));
 

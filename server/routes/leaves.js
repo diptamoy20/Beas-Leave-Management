@@ -62,6 +62,139 @@ async function checkLeaveOverlap(employeeId, startDateStr, endDateStr, excludeLe
   return conflicts;
 }
 
+async function deductRegularLeave(employeeId, leaveId, days, actorId, reason) {
+  const connection = await db.pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [balances] = await connection.execute(
+      'SELECT comp_off FROM leave_balance WHERE employee_id = ? FOR UPDATE',
+      [employeeId]
+    );
+    if (balances.length === 0) {
+      throw new Error(`Leave balance not found for employee ${employeeId}`);
+    }
+
+    const compOffAvailable = Math.max(0, Number(balances[0].comp_off || 0));
+    const compOffUsed = Math.min(compOffAvailable, days);
+    const earnedLeaveUsed = days - compOffUsed;
+
+    await connection.execute(
+      'UPDATE leave_balance SET comp_off = comp_off - ?, earned_leave = earned_leave - ? WHERE employee_id = ?',
+      [compOffUsed, earnedLeaveUsed, employeeId]
+    );
+    await connection.execute(
+      'UPDATE leave_requests SET comp_off_used = ? WHERE id = ?',
+      [compOffUsed, leaveId]
+    );
+    if (compOffUsed > 0) {
+      await connection.execute(
+        `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by)
+         VALUES (?, 'DEBIT', ?, ?, ?, ?)`,
+        [employeeId, compOffUsed, reason, leaveId, actorId]
+      );
+    }
+    await connection.commit();
+    return compOffUsed;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function refundRegularLeave(employeeId, leaveId, days, compOffUsed, actorId, reason) {
+  const connection = await db.pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const compOffRefund = Math.min(Math.max(0, compOffUsed), days);
+    const earnedLeaveRefund = days - compOffRefund;
+
+    await connection.execute(
+      'UPDATE leave_balance SET comp_off = comp_off + ?, earned_leave = earned_leave + ? WHERE employee_id = ?',
+      [compOffRefund, earnedLeaveRefund, employeeId]
+    );
+    await connection.execute(
+      'UPDATE leave_requests SET comp_off_used = 0 WHERE id = ?',
+      [leaveId]
+    );
+    if (compOffRefund > 0) {
+      await connection.execute(
+        `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by)
+         VALUES (?, 'CREDIT', ?, ?, ?, ?)`,
+        [employeeId, compOffRefund, reason, leaveId, actorId]
+      );
+    }
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function adjustRegularLeaveDeduction(employeeId, leaveId, oldDays, newDays, compOffUsed, actorId, reason) {
+  const connection = await db.pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [balances] = await connection.execute(
+      'SELECT comp_off FROM leave_balance WHERE employee_id = ? FOR UPDATE',
+      [employeeId]
+    );
+    if (balances.length === 0) {
+      throw new Error(`Leave balance not found for employee ${employeeId}`);
+    }
+
+    const change = newDays - oldDays;
+    let updatedCompOffUsed = Math.max(0, compOffUsed);
+    let compOffDelta = 0;
+    let earnedLeaveDelta = 0;
+
+    if (change < 0) {
+      const daysRefunded = -change;
+      compOffDelta = Math.min(updatedCompOffUsed, daysRefunded);
+      earnedLeaveDelta = daysRefunded - compOffDelta;
+      updatedCompOffUsed -= compOffDelta;
+    } else if (change > 0) {
+      const compOffAvailable = Math.max(0, Number(balances[0].comp_off || 0));
+      const additionalCompOffUsed = Math.min(compOffAvailable, change);
+      compOffDelta = -additionalCompOffUsed;
+      earnedLeaveDelta = -(change - additionalCompOffUsed);
+      updatedCompOffUsed += additionalCompOffUsed;
+    }
+
+    await connection.execute(
+      'UPDATE leave_balance SET comp_off = comp_off + ?, earned_leave = earned_leave + ? WHERE employee_id = ?',
+      [compOffDelta, earnedLeaveDelta, employeeId]
+    );
+    await connection.execute(
+      'UPDATE leave_requests SET comp_off_used = ? WHERE id = ?',
+      [updatedCompOffUsed, leaveId]
+    );
+    if (compOffDelta !== 0) {
+      await connection.execute(
+        `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          employeeId,
+          compOffDelta > 0 ? 'CREDIT' : 'DEBIT',
+          Math.abs(compOffDelta),
+          reason,
+          leaveId,
+          actorId
+        ]
+      );
+    }
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 // Public/Auth endpoint to calculate working days for date range preview
 router.post('/calculate-days', auth, async (req, res) => {
   try {
@@ -80,21 +213,10 @@ router.post('/apply', auth, async (req, res) => {
 
     const isCompOff = (leave_type === 'Compensatory Off' || duration === 'Compensatory Off');
     if (isCompOff) {
-      const [balanceRows] = await db.query('SELECT comp_off FROM leave_balance WHERE employee_id = ?', [employee_id]);
-      const availableCompOff = Number(balanceRows[0]?.comp_off || 0);
-
-      // Check already pending comp-off requests to prevent over-commitment
-      const [pendingRows] = await db.query(
-        "SELECT COALESCE(SUM(no_of_days), 0) as pending_days FROM leave_requests WHERE employee_id = ? AND status = 'Pending' AND (leave_type = 'Compensatory Off' OR duration = 'Compensatory Off')",
-        [employee_id]
-      );
-      const pendingDays = Number(pendingRows[0]?.pending_days || 0);
-      const effectiveAvailable = availableCompOff - pendingDays;
-
-      if (Number(no_of_days) > effectiveAvailable) {
+      if (!no_of_days || Number(no_of_days) <= 0) {
         return res.status(400).json({
           success: "false",
-          message: `Insufficient Comp-Off balance. You have ${availableCompOff} day(s) available (${pendingDays} day(s) currently pending approval). Maximum you can apply right now is ${Math.max(0, effectiveAvailable)} day(s).`
+          message: 'Requested Comp-Off days must be greater than zero.'
         });
       }
     }
@@ -167,6 +289,13 @@ router.get('/apply-meta', auth, async (req, res) => {
     const quarterlyLeave = Number(b.quarterly_leave || 0);
     const compOffLeave = Number(b.comp_off || 0);
 
+    // Fetch pending comp-off requests
+    const [pendingCompOffRows] = await db.query(
+      "SELECT COALESCE(SUM(no_of_days), 0) as pending_days FROM leave_requests WHERE employee_id = ? AND status = 'Pending' AND (leave_type = 'Compensatory Off' OR duration = 'Compensatory Off')",
+      [employee_id]
+    );
+    const pendingCompOffLeave = Number(pendingCompOffRows[0]?.pending_days || 0);
+
     // 2. Fetch holidays
     const [holidays] = await db.query(
       'SELECT date, purpose as name, type FROM holidays WHERE year = ? ORDER BY date ASC',
@@ -182,8 +311,8 @@ router.get('/apply-meta', auth, async (req, res) => {
       };
     });
 
-    // 3. Fetch authorities (managers and all admin tiers)
-    let query = "SELECT id, name, designation, employee_id FROM employees WHERE (role = 'manager' OR role IN ('admin', 'super_admin', 'admin_1', 'admin_2', 'admin_3')) AND employee_id != ?";
+    // 3. Fetch authorities (managers and admins)
+    let query = "SELECT id, name, designation, employee_id FROM employees WHERE (role = 'manager' OR role IN ('admin', 'super_admin')) AND employee_id != ?";
     const [authorities] = await db.query(query, [employee_id]);
 
     // 4. Fetch existing leaves (to block dates)
@@ -205,7 +334,8 @@ router.get('/apply-meta', auth, async (req, res) => {
           balanceLeave,
           restrictedLeave,
           quarterlyLeave,
-          compOffLeave
+          compOffLeave,
+          pendingCompOffLeave
         },
         holidays: formattedHolidays,
         authorities,
@@ -590,18 +720,29 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
             [leaveData.employee_id]
           );
         } else if (leaveData.leave_type === 'Compensatory Off' || finalDuration === 'Compensatory Off') {
+          // Comp-Off request approved: CREDIT to employee's comp_off balance
           await db.run(
-            `UPDATE leave_balance SET comp_off = GREATEST(0, comp_off - ?) WHERE employee_id = ?`,
-            [daysToDeduct, leaveData.employee_id]
+            `UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?`,
+            [finalDays, leaveData.employee_id]
           );
           await db.run(
-            `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id) VALUES (?, 'DEBIT', ?, ?, ?)`,
-            [leaveData.employee_id, daysToDeduct, `Comp-Off leave approved (#${leaveData.id})${isDayEdited ? ' with modified days' : ''}`, leaveData.id]
+            `INSERT INTO comp_off_history (employee_id, type, days, work_date, reason, leave_request_id, credited_by) VALUES (?, 'CREDIT', ?, ?, ?, ?, ?)`,
+            [
+              leaveData.employee_id,
+              finalDays,
+              leaveData.start_date,
+              leaveData.reason ? `${leaveData.reason}${isDayEdited ? ' (days modified on approval)' : ''}` : `Comp-Off approved (#${leaveData.id})`,
+              leaveData.id,
+              managerId
+            ]
           );
         } else {
-          await db.run(
-            `UPDATE leave_balance SET earned_leave = earned_leave - ? WHERE employee_id = ?`,
-            [daysToDeduct, leaveData.employee_id]
+          await deductRegularLeave(
+            leaveData.employee_id,
+            id,
+            daysToDeduct,
+            approverEmployeeId,
+            `Comp-Off used for leave (#${id})`
           );
         }
 
@@ -669,13 +810,20 @@ router.post('/:id/cancel', auth, async (req, res) => {
       if (leave.duration === 'Quarterly Leave') {
         await db.run('UPDATE leave_balance SET quarterly_leave = quarterly_leave + 1 WHERE employee_id = ?', [employeeId]);
       } else if (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off') {
-        await db.run('UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?', [days, employeeId]);
+        await db.run('UPDATE leave_balance SET comp_off = GREATEST(0, comp_off - ?) WHERE employee_id = ?', [days, employeeId]);
         await db.run(
-          `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by) VALUES (?, 'CREDIT', ?, ?, ?, ?)`,
-          [employeeId, days, `Comp-Off refunded due to cancellation (#${id}): ${cancellation_reason}`, id, callerEmpId]
+          `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by) VALUES (?, 'DEBIT', ?, ?, ?, ?)`,
+          [employeeId, days, `Comp-Off credit cancelled (#${id}): ${cancellation_reason}`, id, callerEmpId]
         );
       } else {
-        await db.run('UPDATE leave_balance SET earned_leave = earned_leave + ? WHERE employee_id = ?', [days, employeeId]);
+        await refundRegularLeave(
+          employeeId,
+          id,
+          days,
+          Number(leave.comp_off_used || 0),
+          callerEmpId,
+          `Comp-Off refunded for cancelled leave (#${id}): ${cancellation_reason}`
+        );
       }
 
       if (leave.is_restricted) {
@@ -735,13 +883,20 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
       if (leave.duration === 'Quarterly Leave') {
         await db.run('UPDATE leave_balance SET quarterly_leave = quarterly_leave + 1 WHERE employee_id = ?', [employeeId]);
       } else if (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off') {
-        await db.run('UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?', [days, employeeId]);
+        await db.run('UPDATE leave_balance SET comp_off = GREATEST(0, comp_off - ?) WHERE employee_id = ?', [days, employeeId]);
         await db.run(
-          `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by) VALUES (?, 'CREDIT', ?, ?, ?, ?)`,
-          [employeeId, days, `Comp-Off refunded due to record deletion (#${id}) by Admin`, id, req.user.employee_id]
+          `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by) VALUES (?, 'DEBIT', ?, ?, ?, ?)`,
+          [employeeId, days, `Comp-Off credit removed due to record deletion (#${id}) by Admin`, id, req.user.employee_id]
         );
       } else {
-        await db.run('UPDATE leave_balance SET earned_leave = earned_leave + ? WHERE employee_id = ?', [days, employeeId]);
+        await refundRegularLeave(
+          employeeId,
+          id,
+          days,
+          Number(leave.comp_off_used || 0),
+          req.user.employee_id,
+          `Comp-Off refunded after leave record deletion (#${id})`
+        );
       }
 
       if (leave.is_restricted) {
@@ -759,8 +914,8 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Admin: get a specific employee's leave records, balance and info
-router.get('/employee/:employeeId', auth, isAdmin, async (req, res) => {
+// Manager & Admin: get a specific employee's leave records, balance and info
+router.get('/employee/:employeeId', auth, isManager, async (req, res) => {
   try {
     const { employeeId } = req.params;
     const statusFilter = req.query.status; // 'Approved', 'Pending', 'Rejected', or undefined for all
@@ -971,18 +1126,35 @@ router.put('/:id/admin-modify', auth, hasPermission('can_modify_approved_leaves'
         if (oldLeave.duration === 'Quarterly Leave') {
           // No fractional days for quarterly
         } else if (oldLeave.leave_type === 'Compensatory Off' || oldLeave.duration === 'Compensatory Off') {
-          await db.run(
-            `UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?`,
-            [daysDiff, employeeId]
-          );
-          await db.run(
-            `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id) VALUES (?, ?, ?, ?, ?)`,
-            [employeeId, daysDiff > 0 ? 'CREDIT' : 'DEBIT', Math.abs(daysDiff), `Comp-Off adjusted by Admin (#${id}): ${admin_modification_reason}`, id]
-          );
+          const delta = newDays - oldDays;
+          if (delta > 0) {
+            await db.run(
+              `UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?`,
+              [delta, employeeId]
+            );
+            await db.run(
+              `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id) VALUES (?, 'CREDIT', ?, ?, ?)`,
+              [employeeId, delta, `Comp-Off increased by Admin (#${id}): ${admin_modification_reason}`, id]
+            );
+          } else {
+            await db.run(
+              `UPDATE leave_balance SET comp_off = GREATEST(0, comp_off - ?) WHERE employee_id = ?`,
+              [Math.abs(delta), employeeId]
+            );
+            await db.run(
+              `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id) VALUES (?, 'DEBIT', ?, ?, ?)`,
+              [employeeId, Math.abs(delta), `Comp-Off reduced by Admin (#${id}): ${admin_modification_reason}`, id]
+            );
+          }
         } else {
-          await db.run(
-            `UPDATE leave_balance SET earned_leave = earned_leave + ? WHERE employee_id = ?`,
-            [daysDiff, employeeId]
+          await adjustRegularLeaveDeduction(
+            employeeId,
+            id,
+            oldDays,
+            newDays,
+            Number(oldLeave.comp_off_used || 0),
+            req.user.employee_id,
+            `Comp-Off allocation adjusted by Admin (#${id}): ${admin_modification_reason}`
           );
         }
       }
@@ -996,17 +1168,21 @@ router.put('/:id/admin-modify', auth, hasPermission('can_modify_approved_leaves'
         );
       } else if (oldLeave.leave_type === 'Compensatory Off' || oldLeave.duration === 'Compensatory Off') {
         await db.run(
-          `UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?`,
+          `UPDATE leave_balance SET comp_off = GREATEST(0, comp_off - ?) WHERE employee_id = ?`,
           [oldDays, employeeId]
         );
         await db.run(
-          `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id) VALUES (?, 'CREDIT', ?, ?, ?)`,
-          [employeeId, oldDays, `Comp-Off refunded due to leave revocation by Admin (#${id}): ${admin_modification_reason}`, id]
+          `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id) VALUES (?, 'DEBIT', ?, ?, ?)`,
+          [employeeId, oldDays, `Comp-Off revoked by Admin (#${id}): ${admin_modification_reason}`, id]
         );
       } else {
-        await db.run(
-          `UPDATE leave_balance SET earned_leave = earned_leave + ? WHERE employee_id = ?`,
-          [oldDays, employeeId]
+        await refundRegularLeave(
+          employeeId,
+          id,
+          oldDays,
+          Number(oldLeave.comp_off_used || 0),
+          req.user.employee_id,
+          `Comp-Off refunded after leave revoked by Admin (#${id}): ${admin_modification_reason}`
         );
       }
 
@@ -1026,17 +1202,20 @@ router.put('/:id/admin-modify', auth, hasPermission('can_modify_approved_leaves'
         );
       } else if (oldLeave.leave_type === 'Compensatory Off' || oldLeave.duration === 'Compensatory Off') {
         await db.run(
-          `UPDATE leave_balance SET comp_off = GREATEST(0, comp_off - ?) WHERE employee_id = ?`,
+          `UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?`,
           [newDays, employeeId]
         );
         await db.run(
-          `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id) VALUES (?, 'DEBIT', ?, ?, ?)`,
-          [employeeId, newDays, `Comp-Off leave force-approved by Admin (#${id}): ${admin_modification_reason}`, id]
+          `INSERT INTO comp_off_history (employee_id, type, days, work_date, reason, leave_request_id, credited_by) VALUES (?, 'CREDIT', ?, ?, ?, ?, ?)`,
+          [employeeId, newDays, oldLeave.start_date, `Comp-Off force-approved by Admin (#${id}): ${admin_modification_reason}`, id, req.user.employee_id]
         );
       } else {
-        await db.run(
-          `UPDATE leave_balance SET earned_leave = earned_leave - ? WHERE employee_id = ?`,
-          [newDays, employeeId]
+        await deductRegularLeave(
+          employeeId,
+          id,
+          newDays,
+          req.user.employee_id,
+          `Comp-Off used for leave approved by Admin (#${id}): ${admin_modification_reason}`
         );
       }
 

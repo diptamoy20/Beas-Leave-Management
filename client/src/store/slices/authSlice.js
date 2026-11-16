@@ -68,6 +68,8 @@ export const fetchCurrentUser = createAsyncThunk('auth/fetchCurrentUser', async 
     }
     return null;
   } catch (error) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     return rejectWithValue(error.response?.data?.message || 'Failed to fetch current user');
   }
 });
@@ -129,6 +131,13 @@ const authSlice = createSlice({
         if (action.payload) {
           state.user = action.payload;
         }
+      })
+      .addCase(fetchCurrentUser.rejected, (state) => {
+        state.user = null;
+        state.token = null;
+        state.loading = false;
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       });
   },
 });

@@ -182,14 +182,6 @@ const ApplyLeave = () => {
       return;
     }
 
-    if (formData.duration === 'Compensatory Off') {
-      if (compOffLeaveCount <= 0 || Number(formData.no_of_days) > compOffLeaveCount) {
-        setError(`Cannot apply for Comp-Off. You only have ${compOffLeaveCount} day(s) available.`);
-        setTimeout(() => setError(''), 4000);
-        return;
-      }
-    }
-
     const finalData = {
       ...formData,
       leave_type: formData.duration,
@@ -246,10 +238,7 @@ const ApplyLeave = () => {
   const balanceLeaveCount = metaData?.leaveBalance?.balanceLeave || 0;
   const restrictedLeaveCount = metaData?.leaveBalance?.restrictedLeave ?? 1;
   const quarterlyLeaveCount = metaData?.leaveBalance?.quarterlyLeave || 0;
-  const compOffLeaveCount = Number(metaData?.leaveBalance?.compOffLeave || 0);
-
-  const isCompOffSelected = formData.duration === 'Compensatory Off';
-  const hasInsufficientCompOff = isCompOffSelected && (compOffLeaveCount <= 0 || Number(formData.no_of_days) > compOffLeaveCount);
+  const compOffBalance = Number(metaData?.leaveBalance?.compOffLeave || 0);
 
   return (
     <div>
@@ -271,12 +260,6 @@ const ApplyLeave = () => {
         </Col>
         <Col xs={6} md>
           <Card className="stat-card text-center py-3">
-            <div className="stat-label text-gray-200">Comp-Off</div>
-            <div className="stat-value text-info fw-bold">{compOffLeaveCount}</div>
-          </Card>
-        </Col>
-        <Col xs={6} md>
-          <Card className="stat-card text-center py-3">
             <div className="stat-label text-gray-200">Restricted</div>
             <div className="stat-value text-warning">{restrictedLeaveCount}</div>
           </Card>
@@ -287,6 +270,12 @@ const ApplyLeave = () => {
             <div className="stat-value text-secondary">{quarterlyLeaveCount}</div>
           </Card>
         </Col>
+        <Col xs={6} md>
+          <Card className="stat-card text-center py-3">
+            <div className="stat-label text-gray-200">Comp-Off</div>
+            <div className="stat-value text-info fw-bold">{compOffBalance}</div>
+          </Card>
+        </Col>
       </Row>
 
       <Row>
@@ -295,11 +284,6 @@ const ApplyLeave = () => {
             <Card.Body>
               {success && <Alert variant="success">Leave application submitted successfully!</Alert>}
               {error && <Alert variant="danger">{error}</Alert>}
-              {hasInsufficientCompOff && (
-                <Alert variant="warning" className="py-2">
-                  ⚠️ <strong>Insufficient Comp-Off balance:</strong> You have {compOffLeaveCount} Comp-Off day(s) available, but requested {formData.no_of_days || 0} day(s).
-                </Alert>
-              )}
 
               <Form onSubmit={handleSubmit}>
                 <Row>
@@ -355,14 +339,6 @@ const ApplyLeave = () => {
                           name="duration"
                           checked={formData.duration === 'Half Day'}
                           onChange={() => setFormData({ ...formData, duration: 'Half Day' })}
-                        />
-                        <Form.Check
-                          type="radio"
-                          id="leave_compoff"
-                          label={`Comp-Off (${compOffLeaveCount} avail)`}
-                          name="duration"
-                          checked={formData.duration === 'Compensatory Off'}
-                          onChange={() => setFormData({ ...formData, duration: 'Compensatory Off' })}
                         />
                         <Form.Check
                           type="radio"

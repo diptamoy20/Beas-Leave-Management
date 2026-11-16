@@ -13,7 +13,7 @@ import {
   FiVideo
 } from 'react-icons/fi';
 
-const ADMIN_ROLES = ['super_admin', 'admin_1', 'admin_2', 'admin_3', 'admin'];
+const ADMIN_ROLES = ['super_admin', 'admin'];
 
 const Sidebar = () => {
   const { sidebarExpanded } = useSelector((state) => state.theme);
@@ -22,7 +22,7 @@ const Sidebar = () => {
   const role = user?.role;
   const isSuperAdmin = role === 'super_admin';
   const isAdmin = ADMIN_ROLES.includes(role);
-  const canManageAdmins = isSuperAdmin || Boolean(user?.permissions?.can_manage_admins);
+  const canManageAdmins = isSuperAdmin;
   const canViewAllLeaves = isSuperAdmin || user?.permissions?.can_view_all_leaves !== false;
 
   const menuItems = [
@@ -30,7 +30,7 @@ const Sidebar = () => {
     { path: '/apply-leave', icon: <FiFileText />, label: 'Apply Leave' },
     { path: '/my-leaves', icon: <FiCalendar />, label: 'My Leaves' },
     { path: '/attendance', icon: <FiCheckCircle />, label: 'Attendance' },
-    { path: '/comp-off', icon: <FiClock />, label: 'Comp-Off' },
+    { path: '/my-comp-off', icon: <FiClock />, label: 'My Comp-Off' },
     { path: '/client-meetings', icon: <FiVideo />, label: 'Client Meetings' },
     { path: '/holidays', icon: <FiCalendar />, label: 'Holidays' },
   ];
@@ -53,12 +53,21 @@ const Sidebar = () => {
     });
   }
 
-  // All Admin tiers: Employee Leave Records
-  if (isAdmin) {
+  // Managers, Admins, Super Admin: Employee Leave Records
+  if (role === 'manager' || isAdmin) {
     menuItems.push({
       path: '/leave-records',
       icon: <FiCheckSquare />,
       label: 'Employees Leave'
+    });
+  }
+
+  // Managers & Admins: Employee Comp-Off management
+  if (role === 'manager' || isAdmin) {
+    menuItems.push({
+      path: '/employee-comp-off',
+      icon: <FiClock />,
+      label: 'Employee Comp-Off'
     });
   }
 
