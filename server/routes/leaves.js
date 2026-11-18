@@ -392,8 +392,8 @@ router.get('/apply-meta', auth, async (req, res) => {
       [currentYear]
     );
     const formattedHolidays = holidays.map(h => {
-      // YYYY-MM-DD
-      const dateStr = h.date ? new Date(h.date).toISOString().split('T')[0] : null;
+      // Use toLocalYMD to prevent timezone offset shifts (e.g. UTC 18:30 shifting to previous day)
+      const dateStr = toLocalYMD(h.date);
       return {
         date: dateStr,
         name: h.name,

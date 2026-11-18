@@ -116,6 +116,10 @@ const ApplyLeave = () => {
     return new Set(holidays.filter((h) => h.restricted).map((h) => String(h.date)));
   }, [holidays]);
 
+  const availableRestrictedHolidays = useMemo(() => {
+    return holidays.filter((h) => h.restricted);
+  }, [holidays]);
+
   const blockedLeaveDates = useMemo(() => {
     const set = new Set();
     (leaves || []).filter((l) => l.status === 'Pending' || l.status === 'Approved').forEach((l) => {
@@ -195,6 +199,18 @@ const ApplyLeave = () => {
     e.preventDefault();
     if (formData.duration === 'Quarterly Leave' && Number(quarterlyLeaveCount) <= 0) {
       setError('You have 0 Quarterly Leave balance remaining. You cannot apply for Quarterly Leave.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
+
+    if (rhBreakdown.restrictedDays > 0 && Number(restrictedLeaveCount) <= 0) {
+      setError('You have 0 Restricted Holiday balance remaining. You cannot apply for a Restricted Holiday.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
+
+    if (rhBreakdown.restrictedDays > Number(restrictedLeaveCount)) {
+      setError(`Selected range contains ${rhBreakdown.restrictedDays} Restricted Holiday(s), but you only have ${restrictedLeaveCount} remaining.`);
       setTimeout(() => setError(''), 4000);
       return;
     }
@@ -480,10 +496,53 @@ const ApplyLeave = () => {
                 <Form.Group className="mb-3">
                   <Form.Check
                     type="checkbox"
-                    label="Want to add restricted holiday"
+                    id="want_restricted_holiday"
+                    label={`Want to add restricted holiday${Number(restrictedLeaveCount) <= 0 ? ' (No balance)' : ''}`}
                     checked={formData.is_restricted}
-                    onChange={(e) => setFormData({ ...formData, is_restricted: e.target.checked })}
+                    disabled={Number(restrictedLeaveCount) <= 0}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData({ ...formData, is_restricted: checked });
+                    }}
                   />
+                  {formData.is_restricted && availableRestrictedHolidays.length > 0 && (
+                    <div className="mt-2 p-3 bg-light rounded border">
+                      <Form.Label className="fw-semibold text-primary mb-2">
+                        <i className="bi bi-calendar-event me-1"></i> Quick Select Restricted Holiday:
+                      </Form.Label>
+                      <Form.Select
+                        className="form-control"
+                        onChange={(e) => {
+                          const selectedVal = e.target.value;
+                          if (!selectedVal) return;
+                          const rh = availableRestrictedHolidays.find(h => String(h.date) === selectedVal);
+                          if (rh) {
+                            const [y, m, d] = rh.date.split('-').map(Number);
+                            const targetDate = new Date(y, m - 1, d);
+                            setFormData((prev) => ({
+                              ...prev,
+                              start_date: targetDate,
+                              end_date: targetDate,
+                              duration: 'Full Day',
+                              is_restricted: true,
+                              reason: prev.reason || `Restricted Holiday: ${rh.name}`
+                            }));
+                          }
+                        }}
+                        defaultValue=""
+                      >
+                        <option value="">-- Choose an upcoming Restricted Holiday to auto-fill date --</option>
+                        {availableRestrictedHolidays.map((rh) => (
+                          <option key={rh.date} value={rh.date}>
+                            {rh.date} - {rh.name}
+                          </option>
+                        ))}
+                      </Form.Select>
+                      <div className="form-text text-muted mt-1 small">
+                        Selecting a holiday automatically sets the Start & End Date and designates it as a Restricted Holiday deduction.
+                      </div>
+                    </div>
+                  )}
                 </Form.Group>
 
                 <Form.Group className="mb-3">
