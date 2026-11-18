@@ -49,15 +49,26 @@ const ApplyCompOff = () => {
     try {
       const token = localStorage.getItem('token');
       const [metaRes, summaryRes] = await Promise.all([
-        axios.get('/api/leaves/apply-meta', {
+        axios.get('/api/leaves/apply-meta?for_comp_off=true', {
           headers: { Authorization: `Bearer ${token}` }
         }),
         axios.get('/api/comp-off/my-summary', {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);
-      setMetaData(metaRes.data.data);
+      const meta = metaRes.data.data;
+      setMetaData(meta);
       setCompSummary(summaryRes.data.data);
+
+      // Auto-assign CEO/Super Admin authority if applicant is Manager, HR, or Admin
+      if (meta?.isManagerHrOrAdmin && meta?.authorities?.length > 0) {
+        setFormData((prev) => {
+          if (prev.manager_id.length === 0) {
+            return { ...prev, manager_id: [String(meta.authorities[0].employee_id)] };
+          }
+          return prev;
+        });
+      }
     } catch (err) {
       console.error('Failed to load comp-off application data', err);
     } finally {
@@ -313,7 +324,9 @@ const ApplyCompOff = () => {
       <div className="p-3 bg-light border rounded-3 mb-4 d-flex align-items-center gap-3">
         <FiInfo size={24} className="text-primary flex-shrink-0" />
         <div className="small text-secondary">
-          <strong>How Comp-Off Credit Works:</strong> Select the date(s) you worked (such as a weekend or public holiday) and select your approval authority. Upon submission, your request enters <strong>Pending</strong> status. Once approved by your manager/admin, the days will be automatically added to your active <strong>Comp-Off Balance</strong>.
+          <strong>Approval Hierarchy & Credit Policy:</strong> Employees' Comp-Off applications route to their respective reporting manager. Applications by Managers, HR, and Admins route to the <strong>CEO / Super Admin</strong> for approval.
+          <br />
+          <em>Important: Requested days remain <strong>Pending</strong> and will <strong>NOT</strong> increase your available balance until approved by the higher authority.</em>
         </div>
       </div>
 

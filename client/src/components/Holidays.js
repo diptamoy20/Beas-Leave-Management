@@ -11,7 +11,12 @@ const Holidays = () => {
   const dispatch = useDispatch();
   const { holidays, loading } = useSelector((state) => state.holiday);
   const { user } = useSelector((state) => state.auth);
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || Boolean(user?.permissions?.can_manage_holidays);
+
+  // Allow Super Admin, Admin tiers, HR, or users with specific permission
+  const canManageHolidays =
+    ['super_admin', 'admin', 'admin_1', 'admin_2', 'admin_3', 'hr'].includes(user?.role) ||
+    Boolean(user?.permissions?.can_manage_holidays);
+
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -45,22 +50,22 @@ const Holidays = () => {
   const handleFileUpload = async (e) => {
     e.preventDefault();
     if (!uploadFile) {
-      alert('Please select a file');
+      alert('Please select an Excel, CSV, or PDF file');
       return;
     }
     setUploading(true);
     try {
       const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('year', selectedYear);
-      const response = await axios.post('/api/holidays/upload', formData, {
+      const data = new FormData();
+      data.append('file', uploadFile);
+      data.append('year', selectedYear);
+      const response = await axios.post('/api/holidays/upload', data, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
-      alert(response.data.message + (response.data.data?.errors ? '\n\nErrors:\n' + response.data.data.errors.join('\n') : ''));
+      alert(response.data.message + (response.data.data?.errors ? '\n\nNotes/Errors:\n' + response.data.data.errors.join('\n') : ''));
       setShowUploadModal(false);
       setUploadFile(null);
       fetchHolidaysData();
@@ -68,6 +73,25 @@ const Holidays = () => {
       alert(error.response?.data?.message || 'Failed to upload file');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/api/holidays/template', {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Holiday_Upload_Template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert('Failed to download template');
     }
   };
 
@@ -80,7 +104,7 @@ const Holidays = () => {
       await axios.delete(`/api/holidays/year/${selectedYear}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      alert('All holidays deleted successfully');
+      alert(`All holidays for ${selectedYear} deleted successfully`);
       fetchHolidaysData();
     } catch (error) {
       alert('Failed to delete holidays');
@@ -179,12 +203,12 @@ const Holidays = () => {
             font-size: 14px;
           }
           .badge-general {
-            // background-color: #0d6efd;
             color: #0d6efd;
+            font-weight: 600;
           }
           .badge-restricted {
-            // background-color: #3545;
             color: #DC3545;
+            font-weight: 600;
           }
           @media print {
             body {
@@ -210,10 +234,10 @@ const Holidays = () => {
             </tr>
           </thead>
           <tbody>
-            ${holidays.map((holiday, index) => `
+            ${(holidays || []).map((holiday, index) => `
               <tr>
                 <td>${index + 1}</td>
-                <td>${new Date(holiday.date).toLocaleDateString()}</td>
+                <td>${new Date(holiday.date).toLocaleDateString('en-GB')}</td>
                 <td>${holiday.day}</td>
                 <td>${holiday.purpose}</td>
                 <td><span class="badge badge-${holiday.type.toLowerCase()}">${holiday.type}</span></td>
@@ -237,9 +261,9 @@ const Holidays = () => {
   const exportToExcel = () => {
     const csvContent = [
       ['SR. NO.', 'DATE', 'DAY', 'PURPOSE', 'TYPE', 'NUMBER OF DAYS'],
-      ...holidays.map((h, i) => [
+      ...(holidays || []).map((h, i) => [
         i + 1,
-        new Date(h.date).toLocaleDateString(),
+        new Date(h.date).toLocaleDateString('en-GB'),
         h.day,
         h.purpose,
         h.type,
@@ -265,7 +289,7 @@ const Holidays = () => {
       name: 'Day',
       selector: (row) => row.day,
       sortable: true,
-      width: '120px',
+      width: '130px',
     },
     {
       name: 'Holiday',
@@ -279,7 +303,7 @@ const Holidays = () => {
       sortable: true,
       width: '150px',
       cell: (row) => (
-        <span className={`badge text-${row.type === 'General' ? 'primary' : 'danger'}`} style={{fontSize:"13px"}}>
+        <span className={`badge text-${row.type === 'General' ? 'primary' : 'danger'}`} style={{ fontSize: "13px" }}>
           {row.type}
         </span>
       ),
@@ -294,7 +318,7 @@ const Holidays = () => {
     {
       name: 'Actions',
       width: '150px',
-      omit: !isAdmin,
+      omit: !canManageHolidays,
       cell: (row) => (
         <ButtonGroup size="sm">
           <Button variant="outline-primary" onClick={() => handleEdit(row)}>
@@ -351,7 +375,7 @@ const Holidays = () => {
         </div>
 
         <div className="d-flex align-items-center gap-2 flex-wrap">
-          {isAdmin && (
+          {canManageHolidays && (
             <>
               <Button
                 variant="primary"
@@ -367,7 +391,7 @@ const Holidays = () => {
                 style={{ borderRadius: '12px', height: '42px', padding: '0 16px', fontWeight: '600', fontSize: '0.85rem' }}
               >
                 <FiUpload size={14} className="me-1" />
-                Upload Excel
+                Upload List (Excel / PDF)
               </Button>
               <Button
                 variant="outline-danger"
@@ -410,43 +434,47 @@ const Holidays = () => {
         />
       </div>
 
-      {/* Upload Modal */}
-      <Modal show={showUploadModal} onHide={() => setShowUploadModal(false)} centered>
+      {/* Upload Modal (Excel / CSV / PDF) */}
+      <Modal show={showUploadModal} onHide={() => setShowUploadModal(false)} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Upload Holiday List</Modal.Title>
+          <Modal.Title>Upload Holiday List (Excel or PDF)</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <p className="text-muted small">
-            Upload an Excel file (.xlsx, .xls) or CSV file with holiday data
+            Upload an Excel (.xlsx, .xls), CSV (.csv), or official PDF memo with holiday data for <strong>{selectedYear}</strong>.
           </p>
+
           <div className="bg-light p-3 rounded mb-3">
-            <strong>Excel Format Required:</strong>
-            <ul className="small mt-2 mb-0">
-              <li>Column: DATE (e.g., 01/01/2026 or 2026-01-01)</li>
-              <li>Column: DAY (e.g., Monday)</li>
-              <li>Column: PURPOSE (e.g., New Year)</li>
-              <li>Column: TYPE (General or Restricted)</li>
-              <li>Column: NUMBER OF DAYS (e.g., 1)</li>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <strong>Supported Formats:</strong>
+              <Button variant="outline-primary" size="sm" onClick={handleDownloadTemplate} style={{ fontSize: '0.78rem' }}>
+                <FiDownload size={12} className="me-1" /> Download Excel Template
+              </Button>
+            </div>
+            <ul className="small mb-0 ps-3">
+              <li><strong>Excel / CSV:</strong> Columns: <code>DATE</code>, <code>DAY</code>, <code>PURPOSE</code>, <code>TYPE</code> (General or Restricted), <code>NUMBER OF DAYS</code></li>
+              <li><strong>PDF Document:</strong> Official company memo with holiday tables containing date, day of week, purpose, and general/restricted sections.</li>
             </ul>
           </div>
+
           <Form onSubmit={handleFileUpload}>
             <Form.Group className="mb-3">
-              <Form.Label>Select Excel/CSV File</Form.Label>
+              <Form.Label className="fw-semibold">Select File (.xlsx, .xls, .csv, .pdf)</Form.Label>
               <Form.Control
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.xls,.csv,.pdf"
                 onChange={(e) => setUploadFile(e.target.files[0])}
                 required
               />
               {uploadFile && (
-                <Form.Text className="text-success">
-                  ✓ Selected: {uploadFile.name}
+                <Form.Text className="text-success fw-semibold">
+                  ✓ Selected: {uploadFile.name} ({(uploadFile.size / 1024).toFixed(1)} KB)
                 </Form.Text>
               )}
             </Form.Group>
             <div className="d-flex gap-2">
               <Button type="submit" variant="primary" disabled={uploading} className="flex-fill">
-                {uploading ? 'Uploading...' : '📤 Upload & Import'}
+                {uploading ? 'Processing & Importing...' : '📤 Upload & Import'}
               </Button>
               <Button
                 variant="secondary"

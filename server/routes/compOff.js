@@ -98,10 +98,13 @@ router.get('/my-summary', auth, async (req, res) => {
       SELECT 
         h.*,
         m.name as credited_by_name,
+        m.designation as credited_by_designation,
         lr.start_date as leave_start_date,
         lr.end_date as leave_end_date,
         lr.leave_type as leave_type,
-        lr.duration as leave_duration
+        lr.duration as leave_duration,
+        lr.reason as leave_reason,
+        lr.status as leave_status
       FROM comp_off_history h
       LEFT JOIN employees m ON h.credited_by = m.employee_id
       LEFT JOIN leave_requests lr ON h.leave_request_id = lr.id
@@ -116,13 +119,16 @@ router.get('/my-summary', auth, async (req, res) => {
       work_date: toLocalYMD(h.work_date),
       reason: h.reason,
       credited_by: h.credited_by,
-      credited_by_name: h.credited_by_name || 'System / Admin',
+      credited_by_name: h.credited_by_name || (h.type === 'DEBIT' ? 'Leave Approval' : 'System / Admin'),
+      credited_by_designation: h.credited_by_designation || (h.type === 'DEBIT' ? 'Approving Authority' : ''),
       created_at: toLocalYMD(h.created_at),
       leave_request_id: h.leave_request_id,
       leave_start_date: toLocalYMD(h.leave_start_date),
       leave_end_date: toLocalYMD(h.leave_end_date),
       leave_type: h.leave_type,
-      leave_duration: h.leave_duration
+      leave_duration: h.leave_duration,
+      leave_reason: h.leave_reason,
+      leave_status: h.leave_status
     }));
 
     const totalCredited = formattedHistory
@@ -134,12 +140,39 @@ router.get('/my-summary', auth, async (req, res) => {
       .reduce((sum, h) => sum + h.days, 0);
 
     const [pendingRows] = await db.query(
-      `SELECT id, start_date, end_date, no_of_days, reason, status, duration, created_at
+      `SELECT id, start_date, end_date, no_of_days, reason, status, duration, manager_id, created_at
        FROM leave_requests
        WHERE employee_id = ? AND (leave_type = 'Compensatory Off' OR duration = 'Compensatory Off') AND status = 'Pending'
        ORDER BY created_at DESC`,
       [employeeId]
     );
+
+    // Fetch approver names for pending requests
+    const formattedPendingRequests = await Promise.all(pendingRows.map(async (r) => {
+      let approverInfo = 'Assigned Authority';
+      if (r.manager_id) {
+        const [mgrs] = await db.query(
+          `SELECT name, designation FROM employees WHERE FIND_IN_SET(employee_id, ?) > 0`,
+          [r.manager_id]
+        );
+        if (mgrs.length > 0) {
+          approverInfo = mgrs.map(m => `${m.name} (${m.designation || 'Authority'})`).join(', ');
+        }
+      }
+      return {
+        id: r.id,
+        start_date: toLocalYMD(r.start_date),
+        end_date: toLocalYMD(r.end_date),
+        days: Number(r.no_of_days || 0),
+        reason: r.reason,
+        status: r.status,
+        duration: r.duration,
+        manager_id: r.manager_id,
+        approver_info: approverInfo,
+        created_at: toLocalYMD(r.created_at)
+      };
+    }));
+
     const pendingDays = pendingRows.reduce((sum, r) => sum + Number(r.no_of_days || 0), 0);
 
     res.json({
@@ -151,16 +184,7 @@ router.get('/my-summary', auth, async (req, res) => {
         totalUsed,
         pendingDays,
         history: formattedHistory,
-        pendingRequests: pendingRows.map(r => ({
-          id: r.id,
-          start_date: toLocalYMD(r.start_date),
-          end_date: toLocalYMD(r.end_date),
-          days: Number(r.no_of_days || 0),
-          reason: r.reason,
-          status: r.status,
-          duration: r.duration,
-          created_at: toLocalYMD(r.created_at)
-        }))
+        pendingRequests: formattedPendingRequests
       }
     });
   } catch (error) {

@@ -2,7 +2,7 @@
   "name": "beas-lms-client",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://localhost:5001",
+  "proxy": "http://localhost:5000",
   "homepage": ".",
   "scripts": {
     "start": "react-scripts start",

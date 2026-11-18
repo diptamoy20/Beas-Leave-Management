@@ -64,11 +64,35 @@ router.get('/', auth, async (req, res) => {
 
     const balance = balanceByEmpId.length > 0 ? balanceByEmpId[0] : (balances.length > 0 ? balances[0] : null);
 
-    // Mock summary data based on requested format, but populating dynamically if possible
-    const totalLeave = Number(balance?.earned_leave || 12) + Number(balance?.quarterly_leave || 15);
-    const balanceLeave = Number(balance?.earned_leave || 14); // Default to 14 if earned_leave doesn't exist yet
-    const earlyLeave = Number(balance?.quarterly_leave !== undefined ? balance.quarterly_leave : 3); // Fallback to 3 if undefined
+    // Live leave balances
+    const earnedLeaveBal = Number(balance?.earned_leave || 0);
+    const quarterlyLeaveBal = Number(balance?.quarterly_leave || 0);
     const compOff = Number(balance?.comp_off || 0);
+    const totalLeave = earnedLeaveBal + quarterlyLeaveBal;
+    const balanceLeave = earnedLeaveBal;
+    const earlyLeave = quarterlyLeaveBal;
+
+    // Live Comp-Off summary metrics from comp_off_history and leave_requests
+    const [creditedRows] = await db.query(
+      "SELECT COALESCE(SUM(days), 0) as total_credited FROM comp_off_history WHERE employee_id = ? AND type = 'CREDIT'",
+      [employeeId]
+    );
+    const totalCompOffCredited = Number(creditedRows[0]?.total_credited || 0);
+
+    const [usedRows] = await db.query(
+      "SELECT COALESCE(SUM(days), 0) as total_used FROM comp_off_history WHERE employee_id = ? AND type = 'DEBIT'",
+      [employeeId]
+    );
+    const totalCompOffUsed = Number(usedRows[0]?.total_used || 0);
+
+    const [pendingCompRows] = await db.query(
+      `SELECT COALESCE(SUM(no_of_days), 0) as pending_days, COUNT(*) as pending_count 
+       FROM leave_requests 
+       WHERE employee_id = ? AND status = 'Pending' AND (leave_type = 'Compensatory Off' OR duration = 'Compensatory Off')`,
+      [employeeId]
+    );
+    const pendingCompOffDays = Number(pendingCompRows[0]?.pending_days || 0);
+    const pendingCompOffCount = Number(pendingCompRows[0]?.pending_count || 0);
 
     const leaveRequestByEmployee = requests.length;
 
@@ -81,7 +105,18 @@ router.get('/', auth, async (req, res) => {
           totalLeave: String(totalLeave),
           balanceLeave: String(balanceLeave),
           earlyLeave: String(earlyLeave),
-          compOff: String(compOff)
+          compOff: String(compOff),
+          compOffCredited: totalCompOffCredited,
+          compOffUsed: totalCompOffUsed,
+          compOffPendingDays: pendingCompOffDays,
+          compOffPendingCount: pendingCompOffCount
+        },
+        compOffSummary: {
+          balance: compOff,
+          totalCredited: totalCompOffCredited,
+          totalUsed: totalCompOffUsed,
+          pendingDays: pendingCompOffDays,
+          pendingCount: pendingCompOffCount
         },
         leaveRequests: formattedRequests
       }
