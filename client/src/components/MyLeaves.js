@@ -13,7 +13,9 @@ import {
   FiEye,
   FiCheckCircle,
   FiAlertCircle,
-  FiRotateCcw
+  FiRotateCcw,
+  FiArrowUpRight,
+  FiArrowDownLeft
 } from 'react-icons/fi';
 import '../assets/css/EmployeeLeaveHistory.css';
 
@@ -93,6 +95,20 @@ const MyLeaves = () => {
     }
   };
 
+  const todayStr = (() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  })();
+
+  const isPastApproved = (row) => {
+    if (row.status !== 'Approved' || !row.start_date) return false;
+    const sDate = String(row.start_date).split('T')[0];
+    return sDate < todayStr;
+  };
+
   const columns = [
     {
       name: 'Leave Type',
@@ -105,6 +121,46 @@ const MyLeaves = () => {
           <strong>{row.leave_type || 'Leave'}</strong>
         </div>
       ),
+    },
+    {
+      name: 'Type',
+      selector: (row) => row.type,
+      sortable: true,
+      width: '120px',
+      cell: (row) => {
+        const isCredit = row.type === 'CREDIT' || row.leave_type === 'Compensatory Off' || row.duration === 'Compensatory Off';
+        return isCredit ? (
+          <span
+            className="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+            style={{
+              backgroundColor: 'rgba(33, 154, 107, 0.12)',
+              color: '#198754',
+              border: '1px solid rgba(33, 154, 107, 0.25)',
+              fontWeight: 700,
+              fontSize: '0.74rem',
+              borderRadius: '999px'
+            }}
+            title="CREDIT: Days credited to your balance"
+          >
+            <FiArrowUpRight size={12} /> CREDIT
+          </span>
+        ) : (
+          <span
+            className="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+            style={{
+              backgroundColor: 'rgba(204, 90, 63, 0.12)',
+              color: '#dc3545',
+              border: '1px solid rgba(204, 90, 63, 0.25)',
+              fontWeight: 700,
+              fontSize: '0.74rem',
+              borderRadius: '999px'
+            }}
+            title="DEBIT: Days deducted from your balance"
+          >
+            <FiArrowDownLeft size={12} /> DEBIT
+          </span>
+        );
+      },
     },
     {
       name: 'Date Period',
@@ -198,7 +254,7 @@ const MyLeaves = () => {
             <span>Details</span>
           </button>
 
-          {(row.status === 'Pending' || row.status === 'Approved') && (
+          {((row.status === 'Pending') || (row.status === 'Approved' && !isPastApproved(row))) && (
             <Button
               size="sm"
               variant="outline-danger"
@@ -212,6 +268,16 @@ const MyLeaves = () => {
               <FiX size={12} className="me-1" />
               Cancel
             </Button>
+          )}
+
+          {row.status === 'Approved' && isPastApproved(row) && (
+            <span
+              className="badge bg-light text-muted border py-1 px-2"
+              style={{ fontSize: '0.72rem' }}
+              title="Leave date has passed. Past approved leaves cannot be changed or cancelled."
+            >
+              Completed
+            </span>
           )}
         </div>
       ),

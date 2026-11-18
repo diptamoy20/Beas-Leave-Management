@@ -209,7 +209,7 @@ router.post('/calculate-days', auth, async (req, res) => {
 router.post('/apply', auth, async (req, res) => {
   try {
 
-    const { employee_id, leave_type = 'Leave', start_date, end_date, no_of_days, reason, manager_id, duration = 'Full Day', is_restricted = false } = req.body;
+    const { employee_id, leave_type = 'Leave', start_date, end_date, no_of_days, reason, manager_id, duration = 'Full Day', is_restricted = false, type } = req.body;
 
     const isCompOff = (leave_type === 'Compensatory Off' || duration === 'Compensatory Off');
     if (isCompOff) {
@@ -221,9 +221,12 @@ router.post('/apply', auth, async (req, res) => {
       }
     }
 
+    // Determine transaction nature: CREDIT for Comp-Off claim/request, DEBIT for taking leave
+    const transactionType = type === 'CREDIT' || isCompOff ? 'CREDIT' : 'DEBIT';
+
     const [result] = await db.run(
-      'INSERT INTO leave_requests (employee_id, manager_id, leave_type, start_date, end_date, no_of_days, reason, status, duration, is_restricted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [employee_id, manager_id || null, leave_type, start_date, end_date, no_of_days, reason, 'Pending', duration, is_restricted]
+      'INSERT INTO leave_requests (employee_id, manager_id, leave_type, start_date, end_date, no_of_days, reason, status, duration, is_restricted, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [employee_id, manager_id || null, leave_type, start_date, end_date, no_of_days, reason, 'Pending', duration, is_restricted, transactionType]
     );
 
     const leaveId = result.insertId;
@@ -422,6 +425,7 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
         toDate: formatDate(leave.end_date),
         appliedOn: formatDate(leave.created_at),
         totalDays: leave.no_of_days,
+        type: leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT'),
         reason: leave.reason,
         rejectionReason: leave.rejection_reason || null,
         approvals,
@@ -505,6 +509,7 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
 
       leaves[i].start_date = toLocalYMD(leave.start_date);
       leaves[i].end_date = toLocalYMD(leave.end_date);
+      leaves[i].type = leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT');
       leaves[i].approvalDetails = approvalDetails;
     }
 
@@ -562,6 +567,7 @@ router.get('/all', auth, isManager, async (req, res) => {
     leaves.forEach(leave => {
       leave.start_date = toLocalYMD(leave.start_date);
       leave.end_date = toLocalYMD(leave.end_date);
+      leave.type = leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT');
       if (leave.manager_status) {
         leave.global_status = leave.status;
         leave.status = leave.manager_status;
@@ -602,6 +608,18 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
     }
 
     const leaveData = leave[0];
+
+    // If leave is already approved and the leave date is in the past, it cannot be changed
+    if (leaveData.status === 'Approved') {
+      const todayStr = toLocalYMD(new Date());
+      const leaveStartDate = toLocalYMD(leaveData.start_date);
+      if (leaveStartDate < todayStr) {
+        return res.status(400).json({
+          success: "false",
+          message: 'This leave date has already passed. Past approved leaves cannot be changed.'
+        });
+      }
+    }
 
     // Check if the approver is in the comma-separated string of manager_ids or is an Admin
     const managerIds = String(leaveData.manager_id || '').split(',').map(m => m.trim());
@@ -802,6 +820,19 @@ router.post('/:id/cancel', auth, async (req, res) => {
       return res.status(400).json({ success: "false", message: 'Rejected leave requests cannot be cancelled.' });
     }
 
+    // An approved leave can be cancelled only till the date of the leave.
+    // Past leaves where the date has exceeded cannot be cancelled or changed.
+    if (leave.status === 'Approved') {
+      const todayStr = toLocalYMD(new Date());
+      const leaveStartDate = toLocalYMD(leave.start_date);
+      if (leaveStartDate < todayStr) {
+        return res.status(400).json({
+          success: "false",
+          message: 'Approved leaves cannot be cancelled once the leave date has passed. Past leaves cannot be changed.'
+        });
+      }
+    }
+
     // If leave was Approved, automatically refund the deducted days!
     if (leave.status === 'Approved') {
       const days = Number(leave.no_of_days || 0);
@@ -958,6 +989,7 @@ router.get('/employee/:employeeId', auth, isManager, async (req, res) => {
       leaveType: leave.leave_type,
       applicationType: leave.duration || 'Full Day',
       status: leave.status,
+      type: leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT'),
       fromDate: toLocalYMD(leave.start_date),
       toDate: toLocalYMD(leave.end_date),
       appliedOn: toLocalYMD(leave.created_at),
@@ -1071,6 +1103,7 @@ router.get('/manager-approved', auth, hasPermission('can_view_all_leaves'), asyn
       leaves[i].start_date = toLocalYMD(leave.start_date);
       leaves[i].end_date = toLocalYMD(leave.end_date);
       leaves[i].created_at = toLocalYMD(leave.created_at);
+      leaves[i].type = leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT');
       leaves[i].approvalDetails = approvalDetails;
     }
 
@@ -1110,6 +1143,18 @@ router.put('/:id/admin-modify', auth, hasPermission('can_modify_approved_leaves'
     const oldLeave = rows[0];
     const employeeId = oldLeave.employee_id;
     const oldStatus = oldLeave.status;
+
+    // Past approved leaves cannot be modified once the date has passed
+    if (oldStatus === 'Approved') {
+      const todayStr = toLocalYMD(new Date());
+      const oldStart = toLocalYMD(oldLeave.start_date);
+      if (oldStart < todayStr) {
+        return res.status(400).json({
+          success: "false",
+          message: 'Past approved leaves cannot be changed once the leave date has passed.'
+        });
+      }
+    }
     const oldDays = Number(oldLeave.no_of_days || 0);
 
     const newStatus = status || oldStatus;

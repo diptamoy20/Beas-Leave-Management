@@ -260,7 +260,18 @@ const ApprovedLeavesReview = () => {
 
                       <td>
                         <span className="fw-semibold text-dark d-block">{leave.leave_type}</span>
-                        <small className="text-muted">{leave.duration || 'Full Day'}</small>
+                        <div className="d-flex align-items-center gap-1 mt-1">
+                          <small className="text-muted">{leave.duration || 'Full Day'}</small>
+                          {leave.type === 'CREDIT' || leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? (
+                            <span className="badge bg-success-subtle text-success border px-1" style={{ fontSize: '0.68rem' }}>
+                              CREDIT
+                            </span>
+                          ) : (
+                            <span className="badge bg-danger-subtle text-danger border px-1" style={{ fontSize: '0.68rem' }}>
+                              DEBIT
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td>
@@ -312,17 +323,41 @@ const ApprovedLeavesReview = () => {
                       </td>
 
                       <td className="text-end">
-                        {canModify ? (
-                          <Button
-                            variant="outline-primary"
-                            size="sm"
-                            onClick={() => openModifyModal(leave)}
-                          >
-                            <FiEdit3 className="me-1" /> Review / Modify
-                          </Button>
-                        ) : (
-                          <span className="text-muted small">View Only</span>
-                        )}
+                        {(() => {
+                          const toYmd = (val) => {
+                            if (!val) return '';
+                            if (typeof val === 'string') return val.split('T')[0];
+                            const d = new Date(val);
+                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                          };
+                          const todayStr = (() => {
+                            const now = new Date();
+                            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                          })();
+                          const isPastApproved = leave.status === 'Approved' && Boolean(leave.start_date && toYmd(leave.start_date) < todayStr);
+
+                          if (isPastApproved) {
+                            return (
+                              <span className="badge bg-light text-muted border px-2 py-1" title="Past approved leaves cannot be modified">
+                                Completed (Past)
+                              </span>
+                            );
+                          }
+
+                          if (canModify) {
+                            return (
+                              <Button
+                                variant="outline-primary"
+                                size="sm"
+                                onClick={() => openModifyModal(leave)}
+                              >
+                                <FiEdit3 className="me-1" /> Review / Modify
+                              </Button>
+                            );
+                          }
+
+                          return <span className="text-muted small">View Only</span>;
+                        })()}
                       </td>
                     </tr>
                   );

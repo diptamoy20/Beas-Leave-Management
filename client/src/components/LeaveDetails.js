@@ -169,6 +169,21 @@ const LeaveDetails = ({ leave: propLeave, onBack }) => {
   const days = leave.totalDays || 0;
   const daysText = `${days} Day${Number(days) !== 1 ? 's' : ''}`;
 
+  const todayStr = (() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  })();
+
+  const isPastApproved = Boolean(
+    leave &&
+    leave.status === 'Approved' &&
+    leave.fromDate &&
+    String(leave.fromDate).split('T')[0] < todayStr
+  );
+
   return (
     <div className="ld-wrapper">
       {/* Header & Breadcrumb */}
@@ -187,7 +202,7 @@ const LeaveDetails = ({ leave: propLeave, onBack }) => {
         </div>
 
         <div className="d-flex align-items-center gap-2">
-          {(leave.status === 'Pending' || leave.status === 'Approved') && (
+          {((leave.status === 'Pending') || (leave.status === 'Approved' && !isPastApproved)) && (
             <Button
               variant="outline-danger"
               style={{ borderRadius: '14px', padding: '10px 18px', fontWeight: '600' }}
@@ -199,6 +214,16 @@ const LeaveDetails = ({ leave: propLeave, onBack }) => {
               <FiRotateCcw size={15} className="me-1" />
               <span>Cancel Leave</span>
             </Button>
+          )}
+
+          {isPastApproved && (
+            <span
+              className="badge bg-light text-muted border py-2 px-3"
+              style={{ borderRadius: '12px', fontSize: '0.85rem' }}
+              title="Leave date has passed. Past approved leaves cannot be changed or cancelled."
+            >
+              Leave Completed (Past Date)
+            </span>
           )}
 
           <button type="button" className="ld-back-btn" onClick={handleBack}>
@@ -438,6 +463,20 @@ const LeaveDetails = ({ leave: propLeave, onBack }) => {
               <div className="ld-meta-row">
                 <span className="ld-meta-label">Request ID</span>
                 <span className="ld-meta-val">#REQ-{leave.id}</span>
+              </div>
+              <div className="ld-meta-row">
+                <span className="ld-meta-label">Transaction Type</span>
+                <span className="ld-meta-val">
+                  {leave.type === 'CREDIT' || leave.leaveType === 'Compensatory Off' || leave.applicationType === 'Compensatory Off' ? (
+                    <span className="badge bg-success-subtle text-success border px-2 py-1" style={{ fontSize: '0.74rem' }}>
+                      CREDIT (Balance Addition)
+                    </span>
+                  ) : (
+                    <span className="badge bg-danger-subtle text-danger border px-2 py-1" style={{ fontSize: '0.74rem' }}>
+                      DEBIT (Balance Deduction)
+                    </span>
+                  )}
+                </span>
               </div>
               <div className="ld-meta-row">
                 <span className="ld-meta-label">Current Status</span>

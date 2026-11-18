@@ -483,6 +483,7 @@ const LeaveRecords = () => {
                 <thead>
                   <tr>
                     <th>Leave Type</th>
+                    <th>Tx Type</th>
                     <th>Application Type</th>
                     <th>Date Period</th>
                     <th>Duration</th>
@@ -499,6 +500,17 @@ const LeaveRecords = () => {
                       <tr key={leave.id} onClick={() => handleLeaveClick(leave.id)}>
                         <td>
                           <strong>{leave.leaveType || 'Leave'}</strong>
+                        </td>
+                        <td>
+                          {leave.type === 'CREDIT' || leave.leaveType === 'Compensatory Off' || leave.applicationType === 'Compensatory Off' ? (
+                            <span className="badge bg-success-subtle text-success border px-2 py-1" style={{ fontSize: '0.74rem' }}>
+                              CREDIT
+                            </span>
+                          ) : (
+                            <span className="badge bg-danger-subtle text-danger border px-2 py-1" style={{ fontSize: '0.74rem' }}>
+                              DEBIT
+                            </span>
+                          )}
                         </td>
                         <td>
                           <span className="badge bg-light text-dark border">

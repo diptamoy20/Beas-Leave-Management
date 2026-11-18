@@ -45,6 +45,7 @@ async function initializeDatabase() {
         end_date DATE NOT NULL,
         reason TEXT,
         status VARCHAR(50) DEFAULT 'Pending',
+        type ENUM('DEBIT', 'CREDIT') NOT NULL DEFAULT 'DEBIT',
         comp_off_used DECIMAL(5,1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
@@ -309,6 +310,14 @@ async function initializeDatabase() {
     if (!requestColNames.includes('cancelled_at')) {
       await connection.query('ALTER TABLE leave_requests ADD COLUMN cancelled_at TIMESTAMP NULL DEFAULT NULL');
       console.log('✅ Added leave_requests.cancelled_at column');
+    }
+
+    if (!requestColNames.includes('type')) {
+      await connection.query("ALTER TABLE leave_requests ADD COLUMN type ENUM('DEBIT', 'CREDIT') NOT NULL DEFAULT 'DEBIT'");
+      console.log('✅ Added leave_requests.type column');
+      // Set existing Compensatory Off credit leaves to CREDIT
+      await connection.query("UPDATE leave_requests SET type = 'CREDIT' WHERE (leave_type = 'Compensatory Off' OR duration = 'Compensatory Off')");
+      console.log('✅ Synchronized existing leave_requests types');
     }
 
     // Ensure attendance columns for waive-off / regularization

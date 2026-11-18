@@ -41,6 +41,7 @@ router.get('/', auth, async (req, res) => {
       return {
         id: req.id,
         type: req.leave_type,
+        transactionType: req.type || (req.leave_type === 'Compensatory Off' || req.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT'),
         applicationType: applicationType,
         fromDate: fromDate,
         toDate: toDate,

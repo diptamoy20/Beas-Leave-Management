@@ -13,7 +13,9 @@ import {
   FiRotateCcw,
   FiAlertCircle,
   FiCheckCircle,
-  FiLayers
+  FiLayers,
+  FiArrowUpRight,
+  FiArrowDownLeft
 } from 'react-icons/fi';
 import '../assets/css/EmployeeLeaveHistory.css';
 
@@ -257,6 +259,46 @@ const ManageLeaves = () => {
       ),
     },
     {
+      name: 'Type',
+      selector: (row) => row.type,
+      sortable: true,
+      width: '120px',
+      cell: (row) => {
+        const isCredit = row.type === 'CREDIT' || row.leave_type === 'Compensatory Off' || row.duration === 'Compensatory Off';
+        return isCredit ? (
+          <span
+            className="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+            style={{
+              backgroundColor: 'rgba(33, 154, 107, 0.12)',
+              color: '#198754',
+              border: '1px solid rgba(33, 154, 107, 0.25)',
+              fontWeight: 700,
+              fontSize: '0.74rem',
+              borderRadius: '999px'
+            }}
+            title="CREDIT: Leave days added to employee balance"
+          >
+            <FiArrowUpRight size={12} /> CREDIT
+          </span>
+        ) : (
+          <span
+            className="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+            style={{
+              backgroundColor: 'rgba(204, 90, 63, 0.12)',
+              color: '#dc3545',
+              border: '1px solid rgba(204, 90, 63, 0.25)',
+              fontWeight: 700,
+              fontSize: '0.74rem',
+              borderRadius: '999px'
+            }}
+            title="DEBIT: Leave days deducted from employee balance"
+          >
+            <FiArrowDownLeft size={12} /> DEBIT
+          </span>
+        );
+      },
+    },
+    {
       name: 'Date Period',
       sortable: true,
       width: '230px',
@@ -378,19 +420,43 @@ const ManageLeaves = () => {
           )}
 
           {row.status === 'Approved' && (
-            <Button
-              size="sm"
-              variant="outline-danger"
-              style={{ borderRadius: '8px', padding: '4px 10px', fontSize: '0.76rem', fontWeight: '600' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                openCancelModal(row.id);
-              }}
-              title="Revoke approved leave and refund balance"
-            >
-              <FiRotateCcw size={12} className="me-1" />
-              Revoke
-            </Button>
+            (() => {
+              const toYmd = (val) => {
+                if (!val) return '';
+                if (typeof val === 'string') return val.split('T')[0];
+                const d = new Date(val);
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              };
+              const todayStr = (() => {
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+              })();
+              const isPastApproved = Boolean(row.start_date && toYmd(row.start_date) < todayStr);
+
+              if (isPastApproved) {
+                return (
+                  <span className="badge bg-light text-muted border" title="Leave date has passed and cannot be revoked">
+                    Completed
+                  </span>
+                );
+              }
+
+              return (
+                <Button
+                  size="sm"
+                  variant="outline-danger"
+                  style={{ borderRadius: '8px', padding: '4px 10px', fontSize: '0.76rem', fontWeight: '600' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openCancelModal(row.id);
+                  }}
+                  title="Revoke approved leave and refund balance"
+                >
+                  <FiRotateCcw size={12} className="me-1" />
+                  Revoke
+                </Button>
+              );
+            })()
           )}
 
           {(row.status === 'Rejected' || row.status === 'Cancelled') && (
