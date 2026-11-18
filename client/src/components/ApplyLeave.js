@@ -136,24 +136,28 @@ const ApplyLeave = () => {
     return set;
   }, [leaves]);
 
+  const [detectedRhList, setDetectedRhList] = useState([]);
   const [rhBreakdown, setRhBreakdown] = useState({ regularDays: 0, restrictedDays: 0, rhNames: [] });
 
   useEffect(() => {
     const { start_date, end_date, duration, is_restricted } = formData;
     if (!start_date || !end_date) {
       setFormData((prev) => ({ ...prev, no_of_days: '' }));
+      setDetectedRhList([]);
       setRhBreakdown({ regularDays: 0, restrictedDays: 0, rhNames: [] });
       return;
     }
 
     if (duration === 'Quarterly Leave') {
       setFormData((prev) => ({ ...prev, no_of_days: 1 }));
+      setDetectedRhList([]);
       setRhBreakdown({ regularDays: 1, restrictedDays: 0, rhNames: [] });
       return;
     }
 
     if (duration === 'Half Day') {
       setFormData((prev) => ({ ...prev, no_of_days: 0.5 }));
+      setDetectedRhList([]);
       setRhBreakdown({ regularDays: 0.5, restrictedDays: 0, rhNames: [] });
       return;
     }
@@ -162,8 +166,7 @@ const ApplyLeave = () => {
     const generalSet = new Set(holidays.filter((h) => !h.restricted).map((h) => String(h.date)));
 
     let regCount = 0;
-    let rhCount = 0;
-    const rhNames = [];
+    const detectedRhs = [];
 
     const current = new Date(start_date);
     const end = new Date(end_date);
@@ -175,8 +178,7 @@ const ApplyLeave = () => {
 
       if (!isWeekend && !generalSet.has(dateStr)) {
         if (restrictedMap.has(dateStr)) {
-          rhCount++;
-          rhNames.push(`${dateStr} (${restrictedMap.get(dateStr)})`);
+          detectedRhs.push({ date: dateStr, name: restrictedMap.get(dateStr) });
         } else {
           regCount++;
         }
@@ -184,21 +186,65 @@ const ApplyLeave = () => {
       current.setDate(current.getDate() + 1);
     }
 
-    const totalDays = regCount + rhCount;
+    setDetectedRhList(detectedRhs);
+
+    // If RH is selected by employee, count as additional leave day; if unselected, exclude from leave deduction
+    const activeRhCount = is_restricted ? detectedRhs.length : 0;
+    const totalDays = regCount + activeRhCount;
+
     setFormData((prev) => ({
       ...prev,
       no_of_days: totalDays,
-      is_restricted: rhCount > 0 ? true : prev.is_restricted
     }));
-    setRhBreakdown({ regularDays: regCount, restrictedDays: rhCount, rhNames });
-  }, [formData.start_date, formData.end_date, formData.duration, holidays]);
+
+    setRhBreakdown({
+      regularDays: regCount,
+      restrictedDays: activeRhCount,
+      rhNames: detectedRhs.map(r => `${r.date} (${r.name})`)
+    });
+  }, [formData.start_date, formData.end_date, formData.duration, formData.is_restricted, holidays]);
 
   const formatDate = (date) => toYmd(date);
 
+  const totalLeave = Number(metaData?.leaveBalance?.totalLeave || 0);
+  const balanceLeaveCount = Number(metaData?.leaveBalance?.balanceLeave || 0);
+  const restrictedLeaveCount = Number(metaData?.leaveBalance?.restrictedLeave ?? 1);
+  const quarterlyLeaveCount = Number(metaData?.leaveBalance?.quarterlyLeave || 0);
+  const compOffBalance = Number(metaData?.leaveBalance?.compOffLeave || 0);
+
+  // Live deduction priority calculation
+  // 1. Regular days: Comp-Off first, then Regular Leave
+  // 2. Selected RH days: Regular Leave first, then Comp-Off
+  const requestedTotalDays = Number(formData.no_of_days || 0);
+  const regDaysToDeduct = rhBreakdown.regularDays;
+  const rhDaysToDeduct = rhBreakdown.restrictedDays;
+
+  const regCompUsed = Math.min(compOffBalance, regDaysToDeduct);
+  const regEarnedUsed = Math.max(0, regDaysToDeduct - regCompUsed);
+
+  const remCompAfterReg = compOffBalance - regCompUsed;
+  const remEarnedAfterReg = balanceLeaveCount - regEarnedUsed;
+
+  const rhEarnedUsed = Math.min(Math.max(0, remEarnedAfterReg), rhDaysToDeduct);
+  const rhCompUsed = Math.max(0, rhDaysToDeduct - rhEarnedUsed);
+
+  const projectedCompOffUsed = Number((regCompUsed + rhCompUsed).toFixed(1));
+  const projectedRegularLeaveUsed = Number((regEarnedUsed + rhEarnedUsed).toFixed(1));
+
+  const totalAvailableDays = compOffBalance + balanceLeaveCount;
+  const isBalanceInsufficient = formData.duration !== 'Quarterly Leave' && requestedTotalDays > totalAvailableDays;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (formData.duration === 'Quarterly Leave' && Number(quarterlyLeaveCount) <= 0) {
       setError('You have 0 Quarterly Leave balance remaining. You cannot apply for Quarterly Leave.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
+
+    if (isBalanceInsufficient) {
+      setError(`Insufficient leave balance. You requested ${requestedTotalDays} day(s), but only have ${totalAvailableDays} day(s) available.`);
       setTimeout(() => setError(''), 4000);
       return;
     }
@@ -243,6 +289,7 @@ const ApplyLeave = () => {
         manager_id: [],
       });
       setApproverQuery('');
+      setDetectedRhList([]);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       const msg = typeof err === 'string' ? err : err?.message || "Something went wrong";
@@ -271,12 +318,6 @@ const ApplyLeave = () => {
     if (blockedLeaveDates.has(key)) return 'datepicker-day--leave-blocked';
     return undefined;
   };
-
-  const totalLeave = metaData?.leaveBalance?.totalLeave || 0;
-  const balanceLeaveCount = metaData?.leaveBalance?.balanceLeave || 0;
-  const restrictedLeaveCount = metaData?.leaveBalance?.restrictedLeave ?? 1;
-  const quarterlyLeaveCount = metaData?.leaveBalance?.quarterlyLeave || 0;
-  const compOffBalance = Number(metaData?.leaveBalance?.compOffLeave || 0);
 
   return (
     <div>
@@ -401,26 +442,106 @@ const ApplyLeave = () => {
                       <Form.Control
                         type="text"
                         placeholder="0"
-                        value={formData.no_of_days}
+                        value={formData.no_of_days !== '' ? `${formData.no_of_days} Day(s)` : ''}
                         disabled
                       />
-                      {rhBreakdown.restrictedDays > 0 && (
-                        <div className="mt-2 p-2 bg-light rounded border small">
-                          <div className="text-success fw-semibold">
-                            <i className="bi bi-info-circle me-1"></i>
-                            Restricted Holiday Detected ({rhBreakdown.restrictedDays} day):
-                          </div>
-                          <div className="text-muted ms-3">
-                            • Regular leave to deduct: <strong>{rhBreakdown.regularDays} day(s)</strong>
-                          </div>
-                          <div className="text-muted ms-3">
-                            • Restricted Holiday to deduct: <strong>{rhBreakdown.restrictedDays} day</strong> ({rhBreakdown.rhNames.join(', ')})
-                          </div>
-                        </div>
-                      )}
                     </Form.Group>
                   </Col>
                 </Row>
+
+                {/* Restricted Holiday Detection & Selection (Phase 6 Requirement) */}
+                {detectedRhList.length > 0 && (
+                  <Alert variant="warning" className="p-3 mb-3 border-warning rounded-3">
+                    <div className="d-flex align-items-start gap-2">
+                      <i className="bi bi-calendar-event fs-5 text-warning flex-shrink-0 mt-1"></i>
+                      <div className="w-100">
+                        <div className="fw-bold text-dark">
+                          Restricted Holiday detected in your selected leave period:
+                        </div>
+                        <ul className="mb-2 mt-1 ps-3 text-secondary small">
+                          {detectedRhList.map((rh, idx) => (
+                            <li key={idx}>
+                              <strong>{rh.date}</strong>: {rh.name}
+                            </li>
+                          ))}
+                        </ul>
+                        <Form.Check
+                          type="checkbox"
+                          id="rh_selection_toggle"
+                          className="fw-semibold text-primary"
+                          label="Include Restricted Holiday in your leave calculation"
+                          checked={formData.is_restricted}
+                          onChange={(e) => setFormData({ ...formData, is_restricted: e.target.checked })}
+                        />
+                        <div className="text-muted small mt-1">
+                          {formData.is_restricted ? (
+                            <span className="text-success">
+                              ✓ Included: Counts as +{detectedRhList.length} leave day (deducted from Regular Leave first; if insufficient, from Comp-Off).
+                            </span>
+                          ) : (
+                            <span className="text-secondary">
+                              ✗ Excluded: This holiday is excluded from your leave deduction calculation.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Alert>
+                )}
+
+                {/* Live Comp-Off Priority Deduction Breakdown Preview (Phase 5 Requirement) */}
+                {formData.start_date && formData.no_of_days !== '' && Number(formData.no_of_days) > 0 && (
+                  <Card className="mb-3 border bg-light shadow-none">
+                    <Card.Body className="p-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="fw-bold small text-dark">
+                          <i className="bi bi-calculator me-1 text-primary"></i>
+                          Automatic Leave Deduction Breakdown Preview
+                        </span>
+                        <Badge bg={isBalanceInsufficient ? 'danger' : 'success'}>
+                          {isBalanceInsufficient ? 'Insufficient Balance' : 'Sufficient Balance'}
+                        </Badge>
+                      </div>
+
+                      <Row className="g-2 small">
+                        <Col sm={6} md={3}>
+                          <div className="p-2 bg-white rounded border">
+                            <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Total Requested</span>
+                            <strong className="text-dark fs-6">{formData.no_of_days} Day(s)</strong>
+                          </div>
+                        </Col>
+                        <Col sm={6} md={3}>
+                          <div className="p-2 bg-white rounded border">
+                            <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Comp-Off (Priority 1)</span>
+                            <strong className="text-info fs-6">-{projectedCompOffUsed} Day(s)</strong>
+                            <div className="text-muted" style={{ fontSize: '0.7rem' }}>Bal: {compOffBalance} → {Math.max(0, (compOffBalance - projectedCompOffUsed).toFixed(1))}</div>
+                          </div>
+                        </Col>
+                        <Col sm={6} md={3}>
+                          <div className="p-2 bg-white rounded border">
+                            <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Regular Leave (Priority 2)</span>
+                            <strong className="text-success fs-6">-{projectedRegularLeaveUsed} Day(s)</strong>
+                            <div className="text-muted" style={{ fontSize: '0.7rem' }}>Bal: {balanceLeaveCount} → {Math.max(0, (balanceLeaveCount - projectedRegularLeaveUsed).toFixed(1))}</div>
+                          </div>
+                        </Col>
+                        <Col sm={6} md={3}>
+                          <div className="p-2 bg-white rounded border">
+                            <span className="text-muted d-block" style={{ fontSize: '0.75rem' }}>Total Available</span>
+                            <strong className="text-primary fs-6">{totalAvailableDays} Day(s)</strong>
+                            <div className="text-muted" style={{ fontSize: '0.7rem' }}>Remaining: {Math.max(0, (totalAvailableDays - requestedTotalDays).toFixed(1))}</div>
+                          </div>
+                        </Col>
+                      </Row>
+
+                      {isBalanceInsufficient && (
+                        <div className="text-danger small mt-2 fw-semibold">
+                          <i className="bi bi-exclamation-triangle me-1"></i>
+                          You do not have enough total leave balance for this request. Please adjust your dates.
+                        </div>
+                      )}
+                    </Card.Body>
+                  </Card>
+                )}
 
                 <Form.Group className="mb-3">
                   <Form.Label>Approval Authority</Form.Label>
@@ -559,10 +680,10 @@ const ApplyLeave = () => {
 
                 <Button
                   type="submit"
-                  disabled={loading}
-                  style={{ background: '#405189', border: 'none' }}
+                  disabled={loading || isBalanceInsufficient}
+                  style={{ background: isBalanceInsufficient ? '#6c757d' : '#405189', border: 'none' }}
                 >
-                  {loading ? 'Submitting...' : 'Submit Leave Request'}
+                  {loading ? 'Submitting...' : isBalanceInsufficient ? 'Insufficient Balance' : 'Submit Leave Request'}
                 </Button>
               </Form>
             </Card.Body>

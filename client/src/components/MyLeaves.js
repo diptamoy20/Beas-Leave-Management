@@ -112,9 +112,9 @@ const MyLeaves = () => {
   const columns = [
     {
       name: 'Leave Type',
-      selector: (row) => row.leave_type,
       sortable: true,
       width: '170px',
+      selector: (row) => row.leave_type,
       cell: (row) => (
         <div className="d-flex align-items-center gap-2">
           <FiCalendar className="text-muted" size={14} />
@@ -124,7 +124,6 @@ const MyLeaves = () => {
     },
     {
       name: 'Type',
-      selector: (row) => row.type,
       sortable: true,
       width: '120px',
       cell: (row) => {
@@ -166,7 +165,6 @@ const MyLeaves = () => {
       name: 'Date Period',
       sortable: true,
       width: '230px',
-      selector: (row) => row.start_date,
       cell: (row) => (
         <div>
           <span>
@@ -294,7 +292,7 @@ const MyLeaves = () => {
             <span>/</span>
             <span className="active">My Leaves</span>
           </div>
-          <h2 className="elh-page-title">My Leave Requests</h2>
+          <h2 className="elh-page-title">My Leave Request</h2>
           <p className="elh-page-subtitle">
             Track applied leaves, review approvals or day adjustments, and cancel requests when schedules change.
           </p>

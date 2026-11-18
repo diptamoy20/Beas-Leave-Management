@@ -267,7 +267,13 @@ const Dashboard = () => {
           <div className="db-kpi-info">
             <span className="db-kpi-label">Comp-Off Balance</span>
             <span className="db-kpi-value">{dashboardData?.leaveSummary?.compOff ?? '0.0'}</span>
-            <span className="db-kpi-hint">Credited compensatory days</span>
+            <span className="db-kpi-hint">
+              {Number(dashboardData?.leaveSummary?.compOffPendingDays || 0) > 0 ? (
+                <span className="text-warning fw-semibold">+{dashboardData.leaveSummary.compOffPendingDays} Pending</span>
+              ) : (
+                'Credited compensatory days'
+              )}
+            </span>
           </div>
         </div>
 
@@ -279,6 +285,70 @@ const Dashboard = () => {
             <span className="db-kpi-label">Total Applications</span>
             <span className="db-kpi-value">{leaves?.length || 0}</span>
             <span className="db-kpi-hint">Submitted requests</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Dedicated Employee Comp-Off Section (Phase 3 Requirement) */}
+      <div className="db-panel-card mb-4" style={{ borderLeft: '4px solid #0dcaf0' }}>
+        <div className="db-panel-header">
+          <h3 className="db-panel-title">
+            <FiAward style={{ color: '#0dcaf0' }} />
+            <span>Comp-Off Overview</span>
+          </h3>
+          <div className="d-flex align-items-center gap-2">
+            <Link to="/apply-comp-off" className="db-action-btn-primary py-1 px-3" style={{ fontSize: '0.82rem' }}>
+              <FiPlus size={14} />
+              <span>Apply Comp-Off</span>
+            </Link>
+            <Link to="/my-comp-off" className="db-panel-link">
+              <span>View Ledger</span>
+              <FiArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+
+        <div className="row g-3 p-3 pt-1">
+          <div className="col-12 col-sm-6 col-lg-3">
+            <div className="p-3 bg-light rounded border text-center h-100">
+              <span className="text-muted small text-uppercase fw-bold d-block">Available Balance</span>
+              <span className="fs-3 fw-bold text-info">
+                {dashboardData?.leaveSummary?.compOff ?? '0'} Days
+              </span>
+              <small className="text-muted d-block mt-1">Ready for leave deduction</small>
+            </div>
+          </div>
+
+          <div className="col-12 col-sm-6 col-lg-3">
+            <div className="p-3 bg-light rounded border text-center h-100">
+              <span className="text-muted small text-uppercase fw-bold d-block">Total Credited</span>
+              <span className="fs-3 fw-bold text-success">
+                {dashboardData?.leaveSummary?.compOffCredited ?? 0} Days
+              </span>
+              <small className="text-muted d-block mt-1">Lifetime granted</small>
+            </div>
+          </div>
+
+          <div className="col-12 col-sm-6 col-lg-3">
+            <div className="p-3 bg-light rounded border text-center h-100">
+              <span className="text-muted small text-uppercase fw-bold d-block">Total Utilized</span>
+              <span className="fs-3 fw-bold text-danger">
+                {dashboardData?.leaveSummary?.compOffUsed ?? 0} Days
+              </span>
+              <small className="text-muted d-block mt-1">Consumed for leaves</small>
+            </div>
+          </div>
+
+          <div className="col-12 col-sm-6 col-lg-3">
+            <div className="p-3 bg-light rounded border text-center h-100">
+              <span className="text-muted small text-uppercase fw-bold d-block">Pending Approval</span>
+              <span className="fs-3 fw-bold text-warning">
+                {dashboardData?.leaveSummary?.compOffPendingDays ?? 0} Days
+              </span>
+              <small className="text-muted d-block mt-1">
+                {dashboardData?.leaveSummary?.compOffPendingCount ?? 0} request(s) awaiting decision
+              </small>
+            </div>
           </div>
         </div>
       </div>

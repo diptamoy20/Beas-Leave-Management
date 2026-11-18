@@ -15,23 +15,61 @@ const toLocalYMD = (d) => {
   return `${year}-${month}-${day}`;
 };
 
+// Helper: Determine if user/applicant is Manager, HR, or Admin
+function isManagerHrOrAdminRole(userRole, designation = '') {
+  const r = String(userRole || '').toLowerCase();
+  const d = String(designation || '').toLowerCase();
+  if (r === 'manager' || r === 'hr' || r === 'admin' || r === 'super_admin') {
+    return true;
+  }
+  if (d.includes('human resources') || d.includes('hr ') || d.startsWith('hr') || d.includes('manager')) {
+    return true;
+  }
+  return false;
+}
+
+// Helper: Determine if user is CEO / Executive
+function isCeoRole(userRole, designation = '') {
+  const r = String(userRole || '').toLowerCase();
+  const d = String(designation || '').toLowerCase();
+  return r === 'ceo' || d.includes('ceo') || d.includes('chief executive') || d.includes('project director') || d.includes('managing director');
+}
+
+// Helper: Fetch CEO / Executive approval authority employees
+async function getCeoAuthorities() {
+  const [rows] = await db.query(`
+    SELECT id, name, designation, employee_id, role, email 
+    FROM employees 
+    WHERE role = 'ceo' 
+       OR designation LIKE '%CEO%' 
+       OR designation LIKE '%Chief Executive%' 
+       OR designation LIKE '%Project Director%'
+       OR designation LIKE '%Managing Director%'
+       OR role = 'super_admin'
+    ORDER BY (role = 'ceo') DESC, (designation LIKE '%CEO%') DESC, (role = 'super_admin') DESC, id ASC
+  `);
+  return rows;
+}
+
 // Calculate working days and identify restricted holidays falling within the range
 // Excludes weekends (Sat, Sun) and General holidays.
-// Returns { totalDays, regularDays, restrictedDays, restrictedHolidayNames }
-async function calculateLeaveBreakdown(startDateStr, endDateStr, duration = 'Full Day', isRestrictedCheckbox = false) {
+// If isRestrictedSelected is false: Restricted holidays within range are excluded from the leave calculation.
+// If isRestrictedSelected is true: Restricted holidays within range are counted as additional leave days.
+// Returns { totalDays, regularDays, restrictedDays, detectedRhCount, restrictedHolidayNames }
+async function calculateLeaveBreakdown(startDateStr, endDateStr, duration = 'Full Day', isRestrictedSelected = false) {
   if (!startDateStr || !endDateStr) {
-    return { totalDays: 0, regularDays: 0, restrictedDays: 0, restrictedHolidayNames: [] };
+    return { totalDays: 0, regularDays: 0, restrictedDays: 0, detectedRhCount: 0, restrictedHolidayNames: [] };
   }
   if (duration === 'First Half' || duration === 'Second Half') {
-    return { totalDays: 0.5, regularDays: 0.5, restrictedDays: 0, restrictedHolidayNames: [] };
+    return { totalDays: 0.5, regularDays: 0.5, restrictedDays: 0, detectedRhCount: 0, restrictedHolidayNames: [] };
   }
   if (duration === 'Quarterly Leave') {
-    return { totalDays: 1, regularDays: 1, restrictedDays: 0, restrictedHolidayNames: [] };
+    return { totalDays: 1, regularDays: 1, restrictedDays: 0, detectedRhCount: 0, restrictedHolidayNames: [] };
   }
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
-    return { totalDays: 0, regularDays: 0, restrictedDays: 0, restrictedHolidayNames: [] };
+    return { totalDays: 0, regularDays: 0, restrictedDays: 0, detectedRhCount: 0, restrictedHolidayNames: [] };
   }
 
   const [holidays] = await db.query(
@@ -52,7 +90,7 @@ async function calculateLeaveBreakdown(startDateStr, endDateStr, duration = 'Ful
   });
 
   let regularDays = 0;
-  let restrictedDays = 0;
+  let detectedRhDays = 0;
   const restrictedHolidayNames = [];
 
   const current = new Date(start);
@@ -63,7 +101,7 @@ async function calculateLeaveBreakdown(startDateStr, endDateStr, duration = 'Ful
     // Skip weekends and configured general holidays
     if (dayOfWeek !== 0 && dayOfWeek !== 6 && !generalHolidaySet.has(dateStr)) {
       if (restrictedHolidayMap.has(dateStr)) {
-        restrictedDays += 1;
+        detectedRhDays += 1;
         restrictedHolidayNames.push(`${dateStr} (${restrictedHolidayMap.get(dateStr)})`);
       } else {
         regularDays += 1;
@@ -72,13 +110,20 @@ async function calculateLeaveBreakdown(startDateStr, endDateStr, duration = 'Ful
     current.setDate(current.getDate() + 1);
   }
 
+  const restrictedDays = isRestrictedSelected ? detectedRhDays : 0;
   const totalDays = regularDays + restrictedDays;
-  return { totalDays, regularDays, restrictedDays, restrictedHolidayNames };
+  return {
+    totalDays,
+    regularDays,
+    restrictedDays,
+    detectedRhCount: detectedRhDays,
+    restrictedHolidayNames
+  };
 }
 
 // Calculate working days excluding weekends and general holidays
 async function calculateWorkingDays(startDateStr, endDateStr, duration = 'Full Day') {
-  const breakdown = await calculateLeaveBreakdown(startDateStr, endDateStr, duration);
+  const breakdown = await calculateLeaveBreakdown(startDateStr, endDateStr, duration, false);
   return breakdown.totalDays;
 }
 
@@ -100,39 +145,68 @@ async function checkLeaveOverlap(employeeId, startDateStr, endDateStr, excludeLe
   return conflicts;
 }
 
-async function deductRegularLeave(employeeId, leaveId, days, actorId, reason) {
+// Deduct leave days according to priority:
+// - Regular working days: Comp-Off first, then Earned Leave.
+// - Selected Restricted Holidays: Earned Leave first, then Comp-Off.
+async function deductLeaveWithPriority(employeeId, leaveId, regDays, resDays, actorId, reason) {
   const connection = await db.pool.getConnection();
   try {
     await connection.beginTransaction();
     const [balances] = await connection.execute(
-      'SELECT comp_off FROM leave_balance WHERE employee_id = ? FOR UPDATE',
+      'SELECT comp_off, earned_leave, restricted_leave FROM leave_balance WHERE employee_id = ? FOR UPDATE',
       [employeeId]
     );
     if (balances.length === 0) {
       throw new Error(`Leave balance not found for employee ${employeeId}`);
     }
 
-    const compOffAvailable = Math.max(0, Number(balances[0].comp_off || 0));
-    const compOffUsed = Math.min(compOffAvailable, days);
-    const earnedLeaveUsed = days - compOffUsed;
+    const currentCompOff = Math.max(0, Number(balances[0].comp_off || 0));
+    const currentEarned = Math.max(0, Number(balances[0].earned_leave || 0));
+
+    // Priority 1: Regular working days consume Comp-Off first, then Earned Leave
+    const regCompOffUsed = Math.min(currentCompOff, regDays);
+    const regEarnedUsed = Math.max(0, regDays - regCompOffUsed);
+
+    const remCompOff = currentCompOff - regCompOffUsed;
+    const remEarned = currentEarned - regEarnedUsed;
+
+    // Priority 2: Selected Restricted Holidays consume Earned Leave first, then Comp-Off
+    const resEarnedUsed = Math.min(Math.max(0, remEarned), resDays);
+    const resCompOffUsed = Math.max(0, resDays - resEarnedUsed);
+
+    const totalCompOffUsed = Number((regCompOffUsed + resCompOffUsed).toFixed(1));
+    const totalEarnedUsed = Number((regEarnedUsed + resEarnedUsed).toFixed(1));
+
+    if (totalCompOffUsed > currentCompOff || totalEarnedUsed > currentEarned) {
+      throw new Error(
+        `Insufficient balance for deduction: Requires ${totalCompOffUsed} Comp-Off and ${totalEarnedUsed} Regular Leave, but employee has ${currentCompOff} Comp-Off and ${currentEarned} Regular Leave.`
+      );
+    }
 
     await connection.execute(
-      'UPDATE leave_balance SET comp_off = comp_off - ?, earned_leave = earned_leave - ? WHERE employee_id = ?',
-      [compOffUsed, earnedLeaveUsed, employeeId]
+      `UPDATE leave_balance 
+       SET comp_off = GREATEST(0, comp_off - ?), 
+           earned_leave = GREATEST(0, earned_leave - ?),
+           restricted_leave = GREATEST(0, restricted_leave - ?)
+       WHERE employee_id = ?`,
+      [totalCompOffUsed, totalEarnedUsed, resDays, employeeId]
     );
+
     await connection.execute(
-      'UPDATE leave_requests SET comp_off_used = ? WHERE id = ?',
-      [compOffUsed, leaveId]
+      'UPDATE leave_requests SET comp_off_used = ?, regular_days = ?, restricted_days = ? WHERE id = ?',
+      [totalCompOffUsed, regDays, resDays, leaveId]
     );
-    if (compOffUsed > 0) {
+
+    if (totalCompOffUsed > 0) {
       await connection.execute(
         `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by)
          VALUES (?, 'DEBIT', ?, ?, ?, ?)`,
-        [employeeId, compOffUsed, reason, leaveId, actorId]
+        [employeeId, totalCompOffUsed, reason || `Comp-Off debited for leave (#${leaveId})`, leaveId, actorId]
       );
     }
+
     await connection.commit();
-    return compOffUsed;
+    return { compOffUsed: totalCompOffUsed, earnedLeaveUsed: totalEarnedUsed };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -141,28 +215,37 @@ async function deductRegularLeave(employeeId, leaveId, days, actorId, reason) {
   }
 }
 
-async function refundRegularLeave(employeeId, leaveId, days, compOffUsed, actorId, reason) {
+// Refund leave days upon cancellation or rejection of previously approved leave
+async function refundLeaveWithPriority(employeeId, leaveId, totalDays, compOffUsed, resDays, actorId, reason) {
   const connection = await db.pool.getConnection();
   try {
     await connection.beginTransaction();
-    const compOffRefund = Math.min(Math.max(0, compOffUsed), days);
-    const earnedLeaveRefund = days - compOffRefund;
+    const compOffRefund = Math.min(Math.max(0, Number(compOffUsed || 0)), totalDays);
+    const earnedRefund = Math.max(0, totalDays - compOffRefund);
+    const resRefund = Math.max(0, Number(resDays || 0));
 
     await connection.execute(
-      'UPDATE leave_balance SET comp_off = comp_off + ?, earned_leave = earned_leave + ? WHERE employee_id = ?',
-      [compOffRefund, earnedLeaveRefund, employeeId]
+      `UPDATE leave_balance 
+       SET comp_off = comp_off + ?, 
+           earned_leave = earned_leave + ?,
+           restricted_leave = restricted_leave + ?
+       WHERE employee_id = ?`,
+      [compOffRefund, earnedRefund, resRefund, employeeId]
     );
+
     await connection.execute(
       'UPDATE leave_requests SET comp_off_used = 0 WHERE id = ?',
       [leaveId]
     );
+
     if (compOffRefund > 0) {
       await connection.execute(
         `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by)
          VALUES (?, 'CREDIT', ?, ?, ?, ?)`,
-        [employeeId, compOffRefund, reason, leaveId, actorId]
+        [employeeId, compOffRefund, reason || `Comp-Off refunded for leave (#${leaveId})`, leaveId, actorId]
       );
     }
+
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -171,6 +254,14 @@ async function refundRegularLeave(employeeId, leaveId, days, compOffUsed, actorI
     connection.release();
   }
 }
+
+// Backward compatibility alias
+const deductRegularLeave = async (employeeId, leaveId, days, actorId, reason) => {
+  return deductLeaveWithPriority(employeeId, leaveId, days, 0, actorId, reason);
+};
+const refundRegularLeave = async (employeeId, leaveId, days, compOffUsed, actorId, reason) => {
+  return refundLeaveWithPriority(employeeId, leaveId, days, compOffUsed, 0, actorId, reason);
+};
 
 async function adjustRegularLeaveDeduction(employeeId, leaveId, oldDays, newDays, compOffUsed, actorId, reason) {
   const connection = await db.pool.getConnection();
@@ -233,18 +324,59 @@ async function adjustRegularLeaveDeduction(employeeId, leaveId, oldDays, newDays
   }
 }
 
-// Public/Auth endpoint to calculate working days for date range preview with breakdown
+// Public/Auth endpoint to calculate working days for date range preview with breakdown & live balance simulation
 router.post('/calculate-days', auth, async (req, res) => {
   try {
     const { start_date, end_date, duration = 'Full Day', is_restricted = false } = req.body;
-    const breakdown = await calculateLeaveBreakdown(start_date, end_date, duration, is_restricted);
+    const employee_id = req.user.employee_id;
+    const isRhSelected = Boolean(is_restricted);
+
+    const breakdown = await calculateLeaveBreakdown(start_date, end_date, duration, isRhSelected);
+
+    // Fetch employee leave balances for live deduction simulation
+    const [balRows] = await db.query(
+      'SELECT comp_off, earned_leave FROM leave_balance WHERE employee_id = ?',
+      [employee_id]
+    );
+    const compOffBal = Math.max(0, Number(balRows[0]?.comp_off || 0));
+    const earnedLeaveBal = Math.max(0, Number(balRows[0]?.earned_leave || 0));
+
+    // Priority simulation:
+    // 1. Regular days: Comp-Off first, then Earned Leave
+    const regCompOffUsed = Math.min(compOffBal, breakdown.regularDays);
+    const regEarnedUsed = Math.max(0, breakdown.regularDays - regCompOffUsed);
+
+    const remainingCompAfterReg = compOffBal - regCompOffUsed;
+    const remainingEarnedAfterReg = earnedLeaveBal - regEarnedUsed;
+
+    // 2. Restricted Holiday days: Earned Leave first, then Comp-Off
+    const resEarnedUsed = Math.min(Math.max(0, remainingEarnedAfterReg), breakdown.restrictedDays);
+    const resCompOffUsed = Math.max(0, breakdown.restrictedDays - resEarnedUsed);
+
+    const totalCompOffDeduction = Number((regCompOffUsed + resCompOffUsed).toFixed(1));
+    const totalEarnedDeduction = Number((regEarnedUsed + resEarnedUsed).toFixed(1));
+
+    const totalAvailable = compOffBal + earnedLeaveBal;
+    const isSufficient = breakdown.totalDays <= totalAvailable;
+
     res.json({
       success: "true",
       data: {
         days: breakdown.totalDays,
         regular_days: breakdown.regularDays,
         restricted_days: breakdown.restrictedDays,
-        restricted_holiday_names: breakdown.restrictedHolidayNames
+        detected_rh_count: breakdown.detectedRhCount,
+        restricted_holiday_names: breakdown.restrictedHolidayNames,
+        simulation: {
+          comp_off_available: compOffBal,
+          earned_leave_available: earnedLeaveBal,
+          total_available: totalAvailable,
+          comp_off_deduction: totalCompOffDeduction,
+          earned_leave_deduction: totalEarnedDeduction,
+          remaining_comp_off: Math.max(0, Number((compOffBal - totalCompOffDeduction).toFixed(1))),
+          remaining_earned_leave: Math.max(0, Number((earnedLeaveBal - totalEarnedDeduction).toFixed(1))),
+          is_sufficient: isSufficient
+        }
       }
     });
   } catch (error) {
@@ -254,7 +386,6 @@ router.post('/calculate-days', auth, async (req, res) => {
 
 router.post('/apply', auth, async (req, res) => {
   try {
-
     const { employee_id, leave_type = 'Leave', start_date, end_date, no_of_days, reason, manager_id, duration = 'Full Day', is_restricted = false, type } = req.body;
 
     const isCompOff = (leave_type === 'Compensatory Off' || duration === 'Compensatory Off');
@@ -264,6 +395,32 @@ router.post('/apply', auth, async (req, res) => {
           success: "false",
           message: 'Requested Comp-Off days must be greater than zero.'
         });
+      }
+    }
+
+    // Fetch employee details to verify role & hierarchy
+    const [empRows] = await db.query(
+      'SELECT id, employee_id, name, email, role, designation FROM employees WHERE employee_id = ?',
+      [employee_id]
+    );
+    const applicant = empRows[0] || {};
+    const isApplicantHigherAuthority = isManagerHrOrAdminRole(req.user.role || applicant.role, applicant.designation);
+
+    // Determine approver hierarchy for Comp-Off:
+    // When a Manager, HR, or Admin applies for Comp-Off, it must go to the CEO / Super Admin for approval!
+    let effectiveManagerId = manager_id;
+    if (isCompOff && isApplicantHigherAuthority) {
+      const ceoAuthorities = await getCeoAuthorities();
+      const validCeoIds = ceoAuthorities.map(c => String(c.employee_id));
+      const requestedIds = String(manager_id || '').split(',').map(s => s.trim()).filter(Boolean);
+
+      const hasValidCeo = requestedIds.some(id => validCeoIds.includes(id));
+      if (!hasValidCeo) {
+        // Automatically route to CEO / Super Admin
+        const defaultCeo = ceoAuthorities.find(c => String(c.employee_id) !== String(employee_id)) || ceoAuthorities[0];
+        if (defaultCeo) {
+          effectiveManagerId = String(defaultCeo.employee_id);
+        }
       }
     }
 
@@ -300,58 +457,50 @@ router.post('/apply', auth, async (req, res) => {
     // Calculate regular days and restricted holiday days accurately
     let regDays = 0;
     let resDays = 0;
+    let totalRequestedDays = 0;
     if (!isCompOff && duration !== 'Quarterly Leave') {
-      const breakdown = await calculateLeaveBreakdown(start_date, end_date, duration, is_restricted);
+      const breakdown = await calculateLeaveBreakdown(start_date, end_date, duration, Boolean(is_restricted));
       regDays = breakdown.regularDays;
       resDays = breakdown.restrictedDays;
+      totalRequestedDays = breakdown.totalDays;
+
+      // Validate employee balance: available Comp-Off + Regular Leave must be >= requested days
+      const [balRows] = await db.query(
+        'SELECT comp_off, earned_leave FROM leave_balance WHERE employee_id = ?',
+        [employee_id]
+      );
+      const availComp = Math.max(0, Number(balRows[0]?.comp_off || 0));
+      const availEarned = Math.max(0, Number(balRows[0]?.earned_leave || 0));
+      const totalAvailable = availComp + availEarned;
+
+      if (totalRequestedDays > totalAvailable) {
+        return res.status(400).json({
+          success: "false",
+          message: `Insufficient leave balance. You requested ${totalRequestedDays} day(s), but have only ${totalAvailable} day(s) available (${availComp} Comp-Off + ${availEarned} Regular Leave).`
+        });
+      }
     } else {
       regDays = Number(no_of_days || 0);
       resDays = 0;
+      totalRequestedDays = regDays;
     }
 
     const hasRestricted = Boolean(is_restricted || resDays > 0);
 
     const [result] = await db.run(
       'INSERT INTO leave_requests (employee_id, manager_id, leave_type, start_date, end_date, no_of_days, reason, status, duration, is_restricted, type, regular_days, restricted_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [employee_id, manager_id || null, leave_type, start_date, end_date, no_of_days, reason, 'Pending', duration, hasRestricted, transactionType, regDays, resDays]
+      [employee_id, effectiveManagerId || null, leave_type, start_date, end_date, totalRequestedDays, reason, 'Pending', duration, hasRestricted, transactionType, regDays, resDays]
     );
 
     const leaveId = result.insertId;
 
-    if (manager_id) {
-      const managerIds = String(manager_id).split(',').map(id => id.trim()).filter(id => id);
+    if (effectiveManagerId) {
+      const managerIds = String(effectiveManagerId).split(',').map(id => id.trim()).filter(id => id);
       for (const mgrId of managerIds) {
         await db.run(
           'INSERT INTO leave_approvals (leave_id, manager_id, status) VALUES (?, ?, ?)',
           [leaveId, mgrId, 'Pending']
         );
-      }
-    }
-
-    // Send email notification to managers if manager_id is present
-    if (manager_id) {
-      try {
-        const [managerRows] = await db.query('SELECT name, email FROM employees WHERE FIND_IN_SET(employee_id, ?) > 0', [manager_id]);
-        const [employeeRows] = await db.query('SELECT name, email FROM employees WHERE employee_id = ?', [employee_id]);
-
-        // if (managerRows.length > 0 && employeeRows.length > 0) {
-        //   const employee = employeeRows[0];
-
-        //   for (const manager of managerRows) {
-        //     if (manager.email) {
-        //       await sendLeaveApplicationEmail(
-        //         manager.email,
-        //         manager.name,
-        //         employee.name,
-        //         employee.email,
-        //         { leave_type, start_date, end_date, no_of_days, reason, duration, is_restricted }
-        //       );
-        //     }
-        //   }
-        // }
-      } catch (emailError) {
-        console.error('Failed to send leave application email:', emailError);
-        // Continue with the success response even if email fails
       }
     }
 
@@ -401,11 +550,40 @@ router.get('/apply-meta', auth, async (req, res) => {
       };
     });
 
-    // 3. Fetch authorities (managers and admins)
-    let query = "SELECT id, name, designation, employee_id FROM employees WHERE (role = 'manager' OR role IN ('admin', 'super_admin')) AND employee_id != ?";
-    const [authorities] = await db.query(query, [employee_id]);
+    // 3. Fetch employee details to check role & hierarchy
+    const [empDetails] = await db.query(
+      'SELECT id, employee_id, name, designation, role FROM employees WHERE employee_id = ?',
+      [employee_id]
+    );
+    const applicantEmp = empDetails[0] || {};
+    const isManagerHrOrAdmin = isManagerHrOrAdminRole(req.user.role || applicantEmp.role, applicantEmp.designation);
+    const isCeo = isCeoRole(req.user.role || applicantEmp.role, applicantEmp.designation);
 
-    // 4. Fetch existing leaves (to block dates)
+    // 4. Fetch authorities based on approval hierarchy:
+    // If request is for Comp-Off and applicant is Manager, HR, or Admin -> route to CEO / Super Admin
+    const isForCompOff = req.query.for_comp_off === 'true';
+    let authorities = [];
+
+    if (isForCompOff && isManagerHrOrAdmin) {
+      // Must be approved by CEO / Super Admin
+      const ceoList = await getCeoAuthorities();
+      authorities = ceoList.filter(a => String(a.employee_id) !== String(employee_id));
+      if (authorities.length === 0) {
+        // Fallback if self is top super admin
+        const [fallbackAdmins] = await db.query(
+          "SELECT id, name, designation, employee_id FROM employees WHERE (role = 'super_admin' OR role = 'admin') AND employee_id != ?",
+          [employee_id]
+        );
+        authorities = fallbackAdmins;
+      }
+    } else {
+      // Regular employees: list managers and admins
+      let query = "SELECT id, name, designation, employee_id FROM employees WHERE (role = 'manager' OR role IN ('admin', 'super_admin')) AND employee_id != ?";
+      const [authList] = await db.query(query, [employee_id]);
+      authorities = authList;
+    }
+
+    // 5. Fetch existing leaves (to block dates)
     const [existingLeaves] = await db.query(
       'SELECT start_date, end_date FROM leave_requests WHERE employee_id = ? AND status != "Rejected"',
       [employee_id]
@@ -429,7 +607,9 @@ router.get('/apply-meta', auth, async (req, res) => {
         },
         holidays: formattedHolidays,
         authorities,
-        leave: formattedLeaves
+        leave: formattedLeaves,
+        isManagerHrOrAdmin,
+        isCeo
       }
     });
   } catch (error) {
@@ -551,7 +731,7 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
       const searchPattern = `%${req.query.search}%`;
       queryParams.push(searchPattern, searchPattern, searchPattern);
     }
-    
+
     queryStr += ` ORDER BY created_at DESC`;
 
     const [rows] = await db.query(queryStr, queryParams);
@@ -642,7 +822,7 @@ router.get('/all', auth, isManager, async (req, res) => {
        JOIN employees e ON lr.employee_id = e.employee_id 
        LEFT JOIN leave_approvals la ON lr.id = la.leave_id AND la.manager_id = ?
        WHERE FIND_IN_SET(?, lr.manager_id) > 0`;
-       
+
     const queryParams = [approverEmployeeId, approverEmployeeId];
 
     if (req.query.search) {
@@ -667,13 +847,13 @@ router.get('/all', auth, isManager, async (req, res) => {
       }
     });
 
-    res.json({ 
-      success: "true", 
-      message: "Leaves fetched successfully", 
-      data: { 
-        leaves, 
-        earned_leave: balance[0]?.earned_leave ?? 0 
-      } 
+    res.json({
+      success: "true",
+      message: "Leaves fetched successfully",
+      data: {
+        leaves,
+        earned_leave: balance[0]?.earned_leave ?? 0
+      }
     });
   } catch (error) {
     res.status(500).json({ success: "false", message: 'Server error', error: error.message });
@@ -819,6 +999,25 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
       overallStatus = 'Approved';
     }
 
+    // Role and Hierarchy verification for Comp-Off approval:
+    // If applicant is Manager, HR, or Admin applying for Comp-Off, approval requires CEO / Super Admin!
+    const isLeaveCompOff = (leaveData.leave_type === 'Compensatory Off' || finalDuration === 'Compensatory Off' || leaveData.duration === 'Compensatory Off');
+    if (isLeaveCompOff && overallStatus === 'Approved') {
+      const [applicantRows] = await db.query('SELECT role, designation FROM employees WHERE employee_id = ?', [leaveData.employee_id]);
+      const applicantEmp = applicantRows[0] || {};
+      const applicantIsHigher = isManagerHrOrAdminRole(applicantEmp.role, applicantEmp.designation);
+
+      if (applicantIsHigher) {
+        const approverIsCeoOrSuper = req.user.role === 'super_admin' || isCeoRole(req.user.role, req.user.designation);
+        if (!approverIsCeoOrSuper) {
+          return res.status(403).json({
+            success: "false",
+            message: 'Comp-Off applications from Managers, HR, and Admins can only be approved by the CEO / Super Admin.'
+          });
+        }
+      }
+    }
+
     if (overallStatus !== 'Pending' && leaveData.status !== overallStatus) {
       await db.run('UPDATE leave_requests SET status = ?, rejection_reason = ? WHERE id = ?', [overallStatus, rejection_reason || null, id]);
 
@@ -827,10 +1026,10 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
 
         if (finalDuration === 'Quarterly Leave' || leaveData.duration === 'Quarterly Leave') {
           await db.run(
-            `UPDATE leave_balance SET quarterly_leave = quarterly_leave - 1 WHERE employee_id = ?`,
+            `UPDATE leave_balance SET quarterly_leave = GREATEST(0, quarterly_leave - 1) WHERE employee_id = ?`,
             [leaveData.employee_id]
           );
-        } else if (leaveData.leave_type === 'Compensatory Off' || finalDuration === 'Compensatory Off') {
+        } else if (isLeaveCompOff) {
           // Comp-Off request approved: CREDIT to employee's comp_off balance
           await db.run(
             `UPDATE leave_balance SET comp_off = comp_off + ? WHERE employee_id = ?`,
@@ -844,47 +1043,62 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
               leaveData.start_date,
               leaveData.reason ? `${leaveData.reason}${isDayEdited ? ' (days modified on approval)' : ''}` : `Comp-Off approved (#${leaveData.id})`,
               leaveData.id,
-              managerId
+              approverEmployeeId
             ]
           );
         } else {
-          // Calculate breakdown of regular days vs restricted holidays for this leave
+          // Regular leave approval:
+          // Priority 1: Regular working days consume Comp-Off first, then Earned Leave
+          // Priority 2: Selected Restricted Holidays consume Earned Leave first, then Comp-Off
           let regDaysToDeduct = finalDays;
           let resDaysToDeduct = 0;
 
           if (leaveData.regular_days !== undefined && leaveData.restricted_days !== undefined && (Number(leaveData.regular_days) > 0 || Number(leaveData.restricted_days) > 0) && !isDayEdited) {
             regDaysToDeduct = Number(leaveData.regular_days || 0);
-            resDaysToDeduct = Number(leaveData.restricted_days || 0);
+            resDaysToDeduct = leaveData.is_restricted ? Number(leaveData.restricted_days || 0) : 0;
           } else {
-            const breakdown = await calculateLeaveBreakdown(finalStartDate, finalEndDate, finalDuration, leaveData.is_restricted);
+            const breakdown = await calculateLeaveBreakdown(finalStartDate, finalEndDate, finalDuration, Boolean(leaveData.is_restricted));
             regDaysToDeduct = breakdown.regularDays;
             resDaysToDeduct = breakdown.restrictedDays;
           }
 
-          // Update breakdown on leave_requests table
-          await db.run(
-            `UPDATE leave_requests SET regular_days = ?, restricted_days = ? WHERE id = ?`,
-            [regDaysToDeduct, resDaysToDeduct, id]
+          // Deduct with priority
+          await deductLeaveWithPriority(
+            leaveData.employee_id,
+            id,
+            regDaysToDeduct,
+            resDaysToDeduct,
+            approverEmployeeId,
+            `Leave approved (#${id})`
           );
-
-          // Deduct only regular working days from regular leave (earned_leave / comp_off)
-          if (regDaysToDeduct > 0) {
-            await deductRegularLeave(
-              leaveData.employee_id,
-              id,
-              regDaysToDeduct,
-              approverEmployeeId,
-              `Comp-Off used for leave (#${id})`
-            );
-          }
-
-          // Deduct restricted holiday days from employee's restricted_leave balance
-          if (resDaysToDeduct > 0) {
-            await db.run(
-              `UPDATE leave_balance SET restricted_leave = GREATEST(0, restricted_leave - ?) WHERE employee_id = ?`,
-              [resDaysToDeduct, leaveData.employee_id]
-            );
-          }
+        }
+      } else if (overallStatus === 'Rejected' && leaveData.status === 'Approved') {
+        // Reversal: If an already approved leave is later rejected, restore balances!
+        const daysToRestore = Number(leaveData.no_of_days || 0);
+        if (finalDuration === 'Quarterly Leave' || leaveData.duration === 'Quarterly Leave') {
+          await db.run(
+            `UPDATE leave_balance SET quarterly_leave = quarterly_leave + 1 WHERE employee_id = ?`,
+            [leaveData.employee_id]
+          );
+        } else if (isLeaveCompOff) {
+          await db.run(
+            `UPDATE leave_balance SET comp_off = GREATEST(0, comp_off - ?) WHERE employee_id = ?`,
+            [daysToRestore, leaveData.employee_id]
+          );
+          await db.run(
+            `INSERT INTO comp_off_history (employee_id, type, days, reason, leave_request_id, credited_by) VALUES (?, 'DEBIT', ?, ?, ?, ?)`,
+            [leaveData.employee_id, daysToRestore, `Comp-Off approval revoked/rejected (#${id})`, id, approverEmployeeId]
+          );
+        } else {
+          await refundLeaveWithPriority(
+            leaveData.employee_id,
+            id,
+            daysToRestore,
+            Number(leaveData.comp_off_used || 0),
+            Number(leaveData.restricted_days || 0),
+            approverEmployeeId,
+            `Leave approval revoked/rejected (#${id})`
+          );
         }
       }
     }
@@ -963,33 +1177,15 @@ router.post('/:id/cancel', auth, async (req, res) => {
           [employeeId, days, `Comp-Off credit cancelled (#${id}): ${cancellation_reason}`, id, callerEmpId]
         );
       } else {
-        // Refund regular days and restricted holiday days accurately
-        let regDaysToRefund = days;
-        let resDaysToRefund = 0;
-
-        if (leave.regular_days !== undefined && leave.restricted_days !== undefined && (Number(leave.regular_days) > 0 || Number(leave.restricted_days) > 0)) {
-          regDaysToRefund = Number(leave.regular_days || 0);
-          resDaysToRefund = Number(leave.restricted_days || 0);
-        } else if (leave.is_restricted) {
-          const breakdown = await calculateLeaveBreakdown(leave.start_date, leave.end_date, leave.duration, true);
-          regDaysToRefund = breakdown.regularDays;
-          resDaysToRefund = breakdown.restrictedDays;
-        }
-
-        if (regDaysToRefund > 0) {
-          await refundRegularLeave(
-            employeeId,
-            id,
-            regDaysToRefund,
-            Number(leave.comp_off_used || 0),
-            callerEmpId,
-            `Comp-Off refunded for cancelled leave (#${id}): ${cancellation_reason}`
-          );
-        }
-
-        if (resDaysToRefund > 0) {
-          await db.run('UPDATE leave_balance SET restricted_leave = restricted_leave + ? WHERE employee_id = ?', [resDaysToRefund, employeeId]);
-        }
+        await refundLeaveWithPriority(
+          employeeId,
+          id,
+          days,
+          Number(leave.comp_off_used || 0),
+          Number(leave.restricted_days || 0),
+          callerEmpId,
+          `Leave cancelled (#${id}): ${cancellation_reason}`
+        );
       }
     }
 
