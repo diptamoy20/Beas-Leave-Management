@@ -488,6 +488,14 @@ const LeaveDetails = ({ leave: propLeave, onBack }) => {
                 <span className="ld-meta-label">Total Leave Units</span>
                 <span className="ld-meta-val">{days} Day{Number(days) !== 1 ? 's' : ''}</span>
               </div>
+              {leave.restrictedDays > 0 && (
+                <div className="ld-meta-row">
+                  <span className="ld-meta-label">Deduction Breakdown</span>
+                  <span className="ld-meta-val text-muted small">
+                    Regular: <strong>{leave.regularDays}d</strong> • RH: <strong>{leave.restrictedDays}d</strong>
+                  </span>
+                </div>
+              )}
               <div className="ld-meta-row">
                 <span className="ld-meta-label">Submitted On</span>
                 <span className="ld-meta-val">{formatDate(leave.appliedOn)}</span>

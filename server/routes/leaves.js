@@ -15,33 +15,71 @@ const toLocalYMD = (d) => {
   return `${year}-${month}-${day}`;
 };
 
-// Calculate working days excluding weekends and general holidays
-async function calculateWorkingDays(startDateStr, endDateStr, duration = 'Full Day') {
-  if (!startDateStr || !endDateStr) return 0;
+// Calculate working days and identify restricted holidays falling within the range
+// Excludes weekends (Sat, Sun) and General holidays.
+// Returns { totalDays, regularDays, restrictedDays, restrictedHolidayNames }
+async function calculateLeaveBreakdown(startDateStr, endDateStr, duration = 'Full Day', isRestrictedCheckbox = false) {
+  if (!startDateStr || !endDateStr) {
+    return { totalDays: 0, regularDays: 0, restrictedDays: 0, restrictedHolidayNames: [] };
+  }
   if (duration === 'First Half' || duration === 'Second Half') {
-    return 0.5;
+    return { totalDays: 0.5, regularDays: 0.5, restrictedDays: 0, restrictedHolidayNames: [] };
+  }
+  if (duration === 'Quarterly Leave') {
+    return { totalDays: 1, regularDays: 1, restrictedDays: 0, restrictedHolidayNames: [] };
   }
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+    return { totalDays: 0, regularDays: 0, restrictedDays: 0, restrictedHolidayNames: [] };
+  }
 
   const [holidays] = await db.query(
-    `SELECT date FROM holidays WHERE type = 'General' AND date BETWEEN ? AND ?`,
+    `SELECT date, purpose, type FROM holidays WHERE date BETWEEN ? AND ?`,
     [startDateStr, endDateStr]
   );
-  const holidaySet = new Set(holidays.map(h => toLocalYMD(h.date)));
 
-  let count = 0;
+  const generalHolidaySet = new Set();
+  const restrictedHolidayMap = new Map(); // dateStr -> purpose
+
+  holidays.forEach(h => {
+    const dStr = toLocalYMD(h.date);
+    if (h.type === 'General') {
+      generalHolidaySet.add(dStr);
+    } else if (h.type === 'Restricted') {
+      restrictedHolidayMap.set(dStr, h.purpose || 'Restricted Holiday');
+    }
+  });
+
+  let regularDays = 0;
+  let restrictedDays = 0;
+  const restrictedHolidayNames = [];
+
   const current = new Date(start);
   while (current <= end) {
     const dayOfWeek = current.getDay(); // 0 = Sunday, 6 = Saturday
     const dateStr = toLocalYMD(current);
-    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidaySet.has(dateStr)) {
-      count += 1;
+
+    // Skip weekends and configured general holidays
+    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !generalHolidaySet.has(dateStr)) {
+      if (restrictedHolidayMap.has(dateStr)) {
+        restrictedDays += 1;
+        restrictedHolidayNames.push(`${dateStr} (${restrictedHolidayMap.get(dateStr)})`);
+      } else {
+        regularDays += 1;
+      }
     }
     current.setDate(current.getDate() + 1);
   }
-  return count;
+
+  const totalDays = regularDays + restrictedDays;
+  return { totalDays, regularDays, restrictedDays, restrictedHolidayNames };
+}
+
+// Calculate working days excluding weekends and general holidays
+async function calculateWorkingDays(startDateStr, endDateStr, duration = 'Full Day') {
+  const breakdown = await calculateLeaveBreakdown(startDateStr, endDateStr, duration);
+  return breakdown.totalDays;
 }
 
 // Check for overlapping leave requests for an employee
@@ -195,12 +233,20 @@ async function adjustRegularLeaveDeduction(employeeId, leaveId, oldDays, newDays
   }
 }
 
-// Public/Auth endpoint to calculate working days for date range preview
+// Public/Auth endpoint to calculate working days for date range preview with breakdown
 router.post('/calculate-days', auth, async (req, res) => {
   try {
-    const { start_date, end_date, duration = 'Full Day' } = req.body;
-    const days = await calculateWorkingDays(start_date, end_date, duration);
-    res.json({ success: "true", data: { days } });
+    const { start_date, end_date, duration = 'Full Day', is_restricted = false } = req.body;
+    const breakdown = await calculateLeaveBreakdown(start_date, end_date, duration, is_restricted);
+    res.json({
+      success: "true",
+      data: {
+        days: breakdown.totalDays,
+        regular_days: breakdown.regularDays,
+        restricted_days: breakdown.restrictedDays,
+        restricted_holiday_names: breakdown.restrictedHolidayNames
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: "false", message: error.message });
   }
@@ -221,12 +267,53 @@ router.post('/apply', auth, async (req, res) => {
       }
     }
 
+    // Validation: Check Quarterly Leave balance if applying for Quarterly Leave
+    if (duration === 'Quarterly Leave' || leave_type === 'Quarterly Leave') {
+      const [balRows] = await db.query(
+        'SELECT quarterly_leave FROM leave_balance WHERE employee_id = ?',
+        [employee_id]
+      );
+      const qBal = Number(balRows[0]?.quarterly_leave || 0);
+      if (qBal <= 0) {
+        return res.status(400).json({
+          success: "false",
+          message: 'You have 0 Quarterly Leave balance remaining. You cannot apply for Quarterly Leave.'
+        });
+      }
+
+      // Check if there is already a Pending Quarterly Leave application
+      const [pendingQuarterly] = await db.query(
+        "SELECT id FROM leave_requests WHERE employee_id = ? AND status = 'Pending' AND (duration = 'Quarterly Leave' OR leave_type = 'Quarterly Leave')",
+        [employee_id]
+      );
+      if (pendingQuarterly.length >= qBal) {
+        return res.status(400).json({
+          success: "false",
+          message: 'You already have a pending Quarterly Leave request awaiting approval.'
+        });
+      }
+    }
+
     // Determine transaction nature: CREDIT for Comp-Off claim/request, DEBIT for taking leave
     const transactionType = type === 'CREDIT' || isCompOff ? 'CREDIT' : 'DEBIT';
 
+    // Calculate regular days and restricted holiday days accurately
+    let regDays = 0;
+    let resDays = 0;
+    if (!isCompOff && duration !== 'Quarterly Leave') {
+      const breakdown = await calculateLeaveBreakdown(start_date, end_date, duration, is_restricted);
+      regDays = breakdown.regularDays;
+      resDays = breakdown.restrictedDays;
+    } else {
+      regDays = Number(no_of_days || 0);
+      resDays = 0;
+    }
+
+    const hasRestricted = Boolean(is_restricted || resDays > 0);
+
     const [result] = await db.run(
-      'INSERT INTO leave_requests (employee_id, manager_id, leave_type, start_date, end_date, no_of_days, reason, status, duration, is_restricted, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [employee_id, manager_id || null, leave_type, start_date, end_date, no_of_days, reason, 'Pending', duration, is_restricted, transactionType]
+      'INSERT INTO leave_requests (employee_id, manager_id, leave_type, start_date, end_date, no_of_days, reason, status, duration, is_restricted, type, regular_days, restricted_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [employee_id, manager_id || null, leave_type, start_date, end_date, no_of_days, reason, 'Pending', duration, hasRestricted, transactionType, regDays, resDays]
     );
 
     const leaveId = result.insertId;
@@ -425,6 +512,8 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
         toDate: formatDate(leave.end_date),
         appliedOn: formatDate(leave.created_at),
         totalDays: leave.no_of_days,
+        regularDays: leave.regular_days !== undefined ? Number(leave.regular_days) : Number(leave.no_of_days || 0),
+        restrictedDays: leave.restricted_days !== undefined ? Number(leave.restricted_days) : 0,
         type: leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT'),
         reason: leave.reason,
         rejectionReason: leave.rejection_reason || null,
@@ -509,6 +598,8 @@ router.get('/leave-details/:id?', auth, async (req, res) => {
 
       leaves[i].start_date = toLocalYMD(leave.start_date);
       leaves[i].end_date = toLocalYMD(leave.end_date);
+      leaves[i].regular_days = leave.regular_days !== undefined ? Number(leave.regular_days) : Number(leave.no_of_days || 0);
+      leaves[i].restricted_days = leave.restricted_days !== undefined ? Number(leave.restricted_days) : 0;
       leaves[i].type = leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT');
       leaves[i].approvalDetails = approvalDetails;
     }
@@ -567,6 +658,8 @@ router.get('/all', auth, isManager, async (req, res) => {
     leaves.forEach(leave => {
       leave.start_date = toLocalYMD(leave.start_date);
       leave.end_date = toLocalYMD(leave.end_date);
+      leave.regular_days = leave.regular_days !== undefined ? Number(leave.regular_days) : Number(leave.no_of_days || 0);
+      leave.restricted_days = leave.restricted_days !== undefined ? Number(leave.restricted_days) : 0;
       leave.type = leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT');
       if (leave.manager_status) {
         leave.global_status = leave.status;
@@ -755,20 +848,43 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
             ]
           );
         } else {
-          await deductRegularLeave(
-            leaveData.employee_id,
-            id,
-            daysToDeduct,
-            approverEmployeeId,
-            `Comp-Off used for leave (#${id})`
-          );
-        }
+          // Calculate breakdown of regular days vs restricted holidays for this leave
+          let regDaysToDeduct = finalDays;
+          let resDaysToDeduct = 0;
 
-        if (leaveData.is_restricted) {
+          if (leaveData.regular_days !== undefined && leaveData.restricted_days !== undefined && (Number(leaveData.regular_days) > 0 || Number(leaveData.restricted_days) > 0) && !isDayEdited) {
+            regDaysToDeduct = Number(leaveData.regular_days || 0);
+            resDaysToDeduct = Number(leaveData.restricted_days || 0);
+          } else {
+            const breakdown = await calculateLeaveBreakdown(finalStartDate, finalEndDate, finalDuration, leaveData.is_restricted);
+            regDaysToDeduct = breakdown.regularDays;
+            resDaysToDeduct = breakdown.restrictedDays;
+          }
+
+          // Update breakdown on leave_requests table
           await db.run(
-            `UPDATE leave_balance SET restricted_leave = restricted_leave - 1 WHERE employee_id = ?`,
-            [leaveData.employee_id]
+            `UPDATE leave_requests SET regular_days = ?, restricted_days = ? WHERE id = ?`,
+            [regDaysToDeduct, resDaysToDeduct, id]
           );
+
+          // Deduct only regular working days from regular leave (earned_leave / comp_off)
+          if (regDaysToDeduct > 0) {
+            await deductRegularLeave(
+              leaveData.employee_id,
+              id,
+              regDaysToDeduct,
+              approverEmployeeId,
+              `Comp-Off used for leave (#${id})`
+            );
+          }
+
+          // Deduct restricted holiday days from employee's restricted_leave balance
+          if (resDaysToDeduct > 0) {
+            await db.run(
+              `UPDATE leave_balance SET restricted_leave = GREATEST(0, restricted_leave - ?) WHERE employee_id = ?`,
+              [resDaysToDeduct, leaveData.employee_id]
+            );
+          }
         }
       }
     }
@@ -847,18 +963,33 @@ router.post('/:id/cancel', auth, async (req, res) => {
           [employeeId, days, `Comp-Off credit cancelled (#${id}): ${cancellation_reason}`, id, callerEmpId]
         );
       } else {
-        await refundRegularLeave(
-          employeeId,
-          id,
-          days,
-          Number(leave.comp_off_used || 0),
-          callerEmpId,
-          `Comp-Off refunded for cancelled leave (#${id}): ${cancellation_reason}`
-        );
-      }
+        // Refund regular days and restricted holiday days accurately
+        let regDaysToRefund = days;
+        let resDaysToRefund = 0;
 
-      if (leave.is_restricted) {
-        await db.run('UPDATE leave_balance SET restricted_leave = restricted_leave + 1 WHERE employee_id = ?', [employeeId]);
+        if (leave.regular_days !== undefined && leave.restricted_days !== undefined && (Number(leave.regular_days) > 0 || Number(leave.restricted_days) > 0)) {
+          regDaysToRefund = Number(leave.regular_days || 0);
+          resDaysToRefund = Number(leave.restricted_days || 0);
+        } else if (leave.is_restricted) {
+          const breakdown = await calculateLeaveBreakdown(leave.start_date, leave.end_date, leave.duration, true);
+          regDaysToRefund = breakdown.regularDays;
+          resDaysToRefund = breakdown.restrictedDays;
+        }
+
+        if (regDaysToRefund > 0) {
+          await refundRegularLeave(
+            employeeId,
+            id,
+            regDaysToRefund,
+            Number(leave.comp_off_used || 0),
+            callerEmpId,
+            `Comp-Off refunded for cancelled leave (#${id}): ${cancellation_reason}`
+          );
+        }
+
+        if (resDaysToRefund > 0) {
+          await db.run('UPDATE leave_balance SET restricted_leave = restricted_leave + ? WHERE employee_id = ?', [resDaysToRefund, employeeId]);
+        }
       }
     }
 
@@ -920,18 +1051,33 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
           [employeeId, days, `Comp-Off credit removed due to record deletion (#${id}) by Admin`, id, req.user.employee_id]
         );
       } else {
-        await refundRegularLeave(
-          employeeId,
-          id,
-          days,
-          Number(leave.comp_off_used || 0),
-          req.user.employee_id,
-          `Comp-Off refunded after leave record deletion (#${id})`
-        );
-      }
+        // Refund regular days and restricted holiday days accurately
+        let regDaysToRefund = days;
+        let resDaysToRefund = 0;
 
-      if (leave.is_restricted) {
-        await db.run('UPDATE leave_balance SET restricted_leave = restricted_leave + 1 WHERE employee_id = ?', [employeeId]);
+        if (leave.regular_days !== undefined && leave.restricted_days !== undefined && (Number(leave.regular_days) > 0 || Number(leave.restricted_days) > 0)) {
+          regDaysToRefund = Number(leave.regular_days || 0);
+          resDaysToRefund = Number(leave.restricted_days || 0);
+        } else if (leave.is_restricted) {
+          const breakdown = await calculateLeaveBreakdown(leave.start_date, leave.end_date, leave.duration, true);
+          regDaysToRefund = breakdown.regularDays;
+          resDaysToRefund = breakdown.restrictedDays;
+        }
+
+        if (regDaysToRefund > 0) {
+          await refundRegularLeave(
+            employeeId,
+            id,
+            regDaysToRefund,
+            Number(leave.comp_off_used || 0),
+            req.user.employee_id,
+            `Comp-Off refunded after leave record deletion (#${id})`
+          );
+        }
+
+        if (resDaysToRefund > 0) {
+          await db.run('UPDATE leave_balance SET restricted_leave = restricted_leave + ? WHERE employee_id = ?', [resDaysToRefund, employeeId]);
+        }
       }
     }
 
@@ -994,6 +1140,8 @@ router.get('/employee/:employeeId', auth, isManager, async (req, res) => {
       toDate: toLocalYMD(leave.end_date),
       appliedOn: toLocalYMD(leave.created_at),
       totalDays: leave.no_of_days,
+      regularDays: leave.regular_days !== undefined ? Number(leave.regular_days) : Number(leave.no_of_days || 0),
+      restrictedDays: leave.restricted_days !== undefined ? Number(leave.restricted_days) : 0,
       reason: leave.reason,
     }));
 
@@ -1103,6 +1251,8 @@ router.get('/manager-approved', auth, hasPermission('can_view_all_leaves'), asyn
       leaves[i].start_date = toLocalYMD(leave.start_date);
       leaves[i].end_date = toLocalYMD(leave.end_date);
       leaves[i].created_at = toLocalYMD(leave.created_at);
+      leaves[i].regular_days = leave.regular_days !== undefined ? Number(leave.regular_days) : Number(leave.no_of_days || 0);
+      leaves[i].restricted_days = leave.restricted_days !== undefined ? Number(leave.restricted_days) : 0;
       leaves[i].type = leave.type || (leave.leave_type === 'Compensatory Off' || leave.duration === 'Compensatory Off' ? 'CREDIT' : 'DEBIT');
       leaves[i].approvalDetails = approvalDetails;
     }
@@ -1221,21 +1371,33 @@ router.put('/:id/admin-modify', auth, hasPermission('can_modify_approved_leaves'
           [employeeId, oldDays, `Comp-Off revoked by Admin (#${id}): ${admin_modification_reason}`, id]
         );
       } else {
-        await refundRegularLeave(
-          employeeId,
-          id,
-          oldDays,
-          Number(oldLeave.comp_off_used || 0),
-          req.user.employee_id,
-          `Comp-Off refunded after leave revoked by Admin (#${id}): ${admin_modification_reason}`
-        );
-      }
+        // Refund regular days and restricted holiday days accurately
+        let regDaysToRefund = oldDays;
+        let resDaysToRefund = 0;
 
-      if (oldLeave.is_restricted) {
-        await db.run(
-          `UPDATE leave_balance SET restricted_leave = restricted_leave + 1 WHERE employee_id = ?`,
-          [employeeId]
-        );
+        if (oldLeave.regular_days !== undefined && oldLeave.restricted_days !== undefined && (Number(oldLeave.regular_days) > 0 || Number(oldLeave.restricted_days) > 0)) {
+          regDaysToRefund = Number(oldLeave.regular_days || 0);
+          resDaysToRefund = Number(oldLeave.restricted_days || 0);
+        } else if (oldLeave.is_restricted) {
+          const breakdown = await calculateLeaveBreakdown(oldLeave.start_date, oldLeave.end_date, oldLeave.duration, true);
+          regDaysToRefund = breakdown.regularDays;
+          resDaysToRefund = breakdown.restrictedDays;
+        }
+
+        if (regDaysToRefund > 0) {
+          await refundRegularLeave(
+            employeeId,
+            id,
+            regDaysToRefund,
+            Number(oldLeave.comp_off_used || 0),
+            req.user.employee_id,
+            `Comp-Off refunded after leave revoked by Admin (#${id}): ${admin_modification_reason}`
+          );
+        }
+
+        if (resDaysToRefund > 0) {
+          await db.run('UPDATE leave_balance SET restricted_leave = restricted_leave + ? WHERE employee_id = ?', [resDaysToRefund, employeeId]);
+        }
       }
     }
     // Scenario 3: Was Rejected or Pending, now Admin forces Approved => deduct newDays
@@ -1255,20 +1417,32 @@ router.put('/:id/admin-modify', auth, hasPermission('can_modify_approved_leaves'
           [employeeId, newDays, oldLeave.start_date, `Comp-Off force-approved by Admin (#${id}): ${admin_modification_reason}`, id, req.user.employee_id]
         );
       } else {
-        await deductRegularLeave(
-          employeeId,
-          id,
-          newDays,
-          req.user.employee_id,
-          `Comp-Off used for leave approved by Admin (#${id}): ${admin_modification_reason}`
-        );
-      }
+        // Calculate breakdown for newly approved dates
+        const breakdown = await calculateLeaveBreakdown(newStartDate, newEndDate, oldLeave.duration, oldLeave.is_restricted);
+        const regDaysToDeduct = breakdown.regularDays;
+        const resDaysToDeduct = breakdown.restrictedDays;
 
-      if (oldLeave.is_restricted) {
         await db.run(
-          `UPDATE leave_balance SET restricted_leave = restricted_leave - 1 WHERE employee_id = ?`,
-          [employeeId]
+          `UPDATE leave_requests SET regular_days = ?, restricted_days = ? WHERE id = ?`,
+          [regDaysToDeduct, resDaysToDeduct, id]
         );
+
+        if (regDaysToDeduct > 0) {
+          await deductRegularLeave(
+            employeeId,
+            id,
+            regDaysToDeduct,
+            req.user.employee_id,
+            `Comp-Off used for leave approved by Admin (#${id}): ${admin_modification_reason}`
+          );
+        }
+
+        if (resDaysToDeduct > 0) {
+          await db.run(
+            `UPDATE leave_balance SET restricted_leave = GREATEST(0, restricted_leave - ?) WHERE employee_id = ?`,
+            [resDaysToDeduct, employeeId]
+          );
+        }
       }
     }
 

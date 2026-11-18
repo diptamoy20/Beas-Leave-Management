@@ -132,25 +132,35 @@ const ApplyLeave = () => {
     return set;
   }, [leaves]);
 
+  const [rhBreakdown, setRhBreakdown] = useState({ regularDays: 0, restrictedDays: 0, rhNames: [] });
+
   useEffect(() => {
     const { start_date, end_date, duration, is_restricted } = formData;
     if (!start_date || !end_date) {
       setFormData((prev) => ({ ...prev, no_of_days: '' }));
+      setRhBreakdown({ regularDays: 0, restrictedDays: 0, rhNames: [] });
       return;
     }
 
     if (duration === 'Quarterly Leave') {
       setFormData((prev) => ({ ...prev, no_of_days: 1 }));
+      setRhBreakdown({ regularDays: 1, restrictedDays: 0, rhNames: [] });
       return;
     }
 
     if (duration === 'Half Day') {
       setFormData((prev) => ({ ...prev, no_of_days: 0.5 }));
+      setRhBreakdown({ regularDays: 0.5, restrictedDays: 0, rhNames: [] });
       return;
     }
 
-    const restrictedDates = new Set(holidays.filter((h) => h.restricted).map((h) => String(h.date)));
-    let count = 0;
+    const restrictedMap = new Map(holidays.filter((h) => h.restricted).map((h) => [String(h.date), h.name]));
+    const generalSet = new Set(holidays.filter((h) => !h.restricted).map((h) => String(h.date)));
+
+    let regCount = 0;
+    let rhCount = 0;
+    const rhNames = [];
+
     const current = new Date(start_date);
     const end = new Date(end_date);
 
@@ -158,24 +168,37 @@ const ApplyLeave = () => {
       const day = current.getDay();
       const dateStr = toYmd(current);
       const isWeekend = day === 0 || day === 6;
-      const isRestricted = restrictedDates.has(dateStr);
 
-      if (!isWeekend) {
-        if (isRestricted) {
-          if (is_restricted) count++;
+      if (!isWeekend && !generalSet.has(dateStr)) {
+        if (restrictedMap.has(dateStr)) {
+          rhCount++;
+          rhNames.push(`${dateStr} (${restrictedMap.get(dateStr)})`);
         } else {
-          count++;
+          regCount++;
         }
       }
       current.setDate(current.getDate() + 1);
     }
-    setFormData((prev) => ({ ...prev, no_of_days: count }));
-  }, [formData.start_date, formData.end_date, formData.duration, formData.is_restricted, holidays]);
+
+    const totalDays = regCount + rhCount;
+    setFormData((prev) => ({
+      ...prev,
+      no_of_days: totalDays,
+      is_restricted: rhCount > 0 ? true : prev.is_restricted
+    }));
+    setRhBreakdown({ regularDays: regCount, restrictedDays: rhCount, rhNames });
+  }, [formData.start_date, formData.end_date, formData.duration, holidays]);
 
   const formatDate = (date) => toYmd(date);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.duration === 'Quarterly Leave' && Number(quarterlyLeaveCount) <= 0) {
+      setError('You have 0 Quarterly Leave balance remaining. You cannot apply for Quarterly Leave.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
+
     if (formData.manager_id.length === 0) {
       setError('Please select at least one approval authority');
       setTimeout(() => setError(''), 3000);
@@ -221,7 +244,6 @@ const ApplyLeave = () => {
     if (isWeekend(date)) return false;
     const key = toYmd(date);
     if (generalHolidayDates.has(key)) return false;
-    if (restrictedHolidayDates.has(key) && !formData.is_restricted) return false;
     if (blockedLeaveDates.has(key)) return false;
     return true;
   };
@@ -343,10 +365,15 @@ const ApplyLeave = () => {
                         <Form.Check
                           type="radio"
                           id="leave_quarterly"
-                          label="Quarterly Leave"
+                          label={`Quarterly Leave${Number(quarterlyLeaveCount) <= 0 ? ' (No balance)' : ''}`}
                           name="duration"
+                          disabled={Number(quarterlyLeaveCount) <= 0}
                           checked={formData.duration === 'Quarterly Leave'}
-                          onChange={() => setFormData({ ...formData, duration: 'Quarterly Leave' })}
+                          onChange={() => {
+                            if (Number(quarterlyLeaveCount) > 0) {
+                              setFormData({ ...formData, duration: 'Quarterly Leave' });
+                            }
+                          }}
                         />
                       </div>
                     </Form.Group>
@@ -361,6 +388,20 @@ const ApplyLeave = () => {
                         value={formData.no_of_days}
                         disabled
                       />
+                      {rhBreakdown.restrictedDays > 0 && (
+                        <div className="mt-2 p-2 bg-light rounded border small">
+                          <div className="text-success fw-semibold">
+                            <i className="bi bi-info-circle me-1"></i>
+                            Restricted Holiday Detected ({rhBreakdown.restrictedDays} day):
+                          </div>
+                          <div className="text-muted ms-3">
+                            • Regular leave to deduct: <strong>{rhBreakdown.regularDays} day(s)</strong>
+                          </div>
+                          <div className="text-muted ms-3">
+                            • Restricted Holiday to deduct: <strong>{rhBreakdown.restrictedDays} day</strong> ({rhBreakdown.rhNames.join(', ')})
+                          </div>
+                        </div>
+                      )}
                     </Form.Group>
                   </Col>
                 </Row>

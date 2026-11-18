@@ -47,6 +47,8 @@ async function initializeDatabase() {
         status VARCHAR(50) DEFAULT 'Pending',
         type ENUM('DEBIT', 'CREDIT') NOT NULL DEFAULT 'DEBIT',
         comp_off_used DECIMAL(5,1) NOT NULL DEFAULT 0,
+        restricted_days DECIMAL(5,1) NOT NULL DEFAULT 0,
+        regular_days DECIMAL(5,1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
       )
@@ -318,6 +320,16 @@ async function initializeDatabase() {
       // Set existing Compensatory Off credit leaves to CREDIT
       await connection.query("UPDATE leave_requests SET type = 'CREDIT' WHERE (leave_type = 'Compensatory Off' OR duration = 'Compensatory Off')");
       console.log('✅ Synchronized existing leave_requests types');
+    }
+
+    if (!requestColNames.includes('restricted_days')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN restricted_days DECIMAL(5,1) NOT NULL DEFAULT 0');
+      console.log('✅ Added leave_requests.restricted_days column');
+    }
+
+    if (!requestColNames.includes('regular_days')) {
+      await connection.query('ALTER TABLE leave_requests ADD COLUMN regular_days DECIMAL(5,1) NOT NULL DEFAULT 0');
+      console.log('✅ Added leave_requests.regular_days column');
     }
 
     // Ensure attendance columns for waive-off / regularization
