@@ -23,8 +23,8 @@ router.get('/', auth, async (req, res) => {
        LEFT JOIN employees s ON s.employee_id = n.sender_id
        WHERE n.recipient_id = ?
        ORDER BY n.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [employeeId, limit, offset]
+       LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+      [employeeId]
     );
 
     const [countRows] = await db.query(
