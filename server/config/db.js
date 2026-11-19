@@ -461,6 +461,25 @@ async function initializeDatabase() {
       )
     `);
 
+    // Create in-app notifications table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        recipient_id INT NOT NULL,
+        sender_id INT NULL,
+        type VARCHAR(100) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        reference_id INT NULL,
+        reference_type VARCHAR(50) DEFAULT 'LEAVE',
+        link VARCHAR(255) NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_recipient_read (recipient_id, is_read),
+        INDEX idx_created (created_at)
+      )
+    `);
+
     connection.release();
     console.log('Database tables initialized successfully');
   } catch (error) {

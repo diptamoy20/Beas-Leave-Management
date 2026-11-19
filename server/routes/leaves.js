@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../config/db');
 const { auth, isManager, isAdmin, isSuperAdmin, hasPermission, ADMIN_ROLES } = require('../middleware/auth');
+const { createNotification, createNotificationsForUsers } = require('../services/notificationService');
 // const { sendLeaveApplicationEmail } = require('../utils/email');
 
 const router = express.Router();
@@ -502,7 +503,32 @@ router.post('/apply', auth, async (req, res) => {
           [leaveId, mgrId, 'Pending']
         );
       }
+
+      // Notify the assigned approvers (managers/admins)
+      const approverEmpIds = managerIds.map(Number).filter(id => !isNaN(id) && id > 0);
+      const applicantName = applicant.name || req.user.name || `Employee #${employee_id}`;
+      await createNotificationsForUsers(approverEmpIds, {
+        sender_id: employee_id,
+        type: 'LEAVE_REQUESTED',
+        title: 'New Leave Request Received',
+        message: `${applicantName} submitted a ${duration || leave_type} request for ${totalRequestedDays} day(s) (${start_date} to ${end_date}).`,
+        reference_id: leaveId,
+        reference_type: 'LEAVE',
+        link: `/manage-leaves`
+      });
     }
+
+    // Confirmation notification to the applicant employee
+    await createNotification({
+      recipient_id: employee_id,
+      sender_id: null,
+      type: 'LEAVE_SUBMITTED',
+      title: 'Leave Request Submitted',
+      message: `Your ${duration || leave_type} application for ${totalRequestedDays} day(s) (${start_date} to ${end_date}) was submitted successfully.`,
+      reference_id: leaveId,
+      reference_type: 'LEAVE',
+      link: `/leave-details/${leaveId}`
+    });
 
     res.status(201).json({ success: "true", message: 'Leave request submitted', data: { id: result.insertId } });
   } catch (error) {
@@ -1103,6 +1129,37 @@ router.put('/:id/status', auth, isManager, async (req, res) => {
       }
     }
 
+    // Trigger in-app notifications for status updates
+    const approverName = req.user.name || `Approver #${approverEmployeeId}`;
+    if (overallStatus === 'Approved') {
+      let approvalMsg = `Your leave request (#REQ-${id}) has been approved by ${approverName}.`;
+      if (isDayEdited) {
+        approvalMsg = `Your leave request (#REQ-${id}) has been approved with modified dates/days (${finalDays} day(s), ${toLocalYMD(finalStartDate)} to ${toLocalYMD(finalEndDate)}).`;
+      }
+      await createNotification({
+        recipient_id: leaveData.employee_id,
+        sender_id: approverEmployeeId,
+        type: 'LEAVE_APPROVED',
+        title: isDayEdited ? 'Leave Approved with Modifications' : 'Leave Request Approved',
+        message: approvalMsg,
+        reference_id: id,
+        reference_type: 'LEAVE',
+        link: `/leave-details/${id}`
+      });
+    } else if (overallStatus === 'Rejected') {
+      const rejectMsg = rejection_reason ? `Reason: ${rejection_reason}` : 'No reason provided';
+      await createNotification({
+        recipient_id: leaveData.employee_id,
+        sender_id: approverEmployeeId,
+        type: 'LEAVE_REJECTED',
+        title: 'Leave Request Rejected',
+        message: `Your leave request (#REQ-${id}) was rejected by ${approverName}. ${rejectMsg}`,
+        reference_id: id,
+        reference_type: 'LEAVE',
+        link: `/leave-details/${id}`
+      });
+    }
+
     res.json({
       success: "true",
       message: `Leave status updated to ${overallStatus}${isDayEdited ? ' with updated dates/days' : ''}`,
@@ -1198,6 +1255,46 @@ router.post('/:id/cancel', auth, async (req, res) => {
         cancelled_at = NOW()
       WHERE id = ?
     `, [cancellation_reason.trim(), callerEmpId, id]);
+
+    // Send notifications regarding cancellation
+    const cancellerName = req.user.name || `User #${callerEmpId}`;
+    if (isOwner) {
+      // Employee cancelled their own leave: notify the assigned managers
+      const approverEmpIds = managerIds.map(Number).filter(mid => !isNaN(mid) && mid > 0);
+      await createNotificationsForUsers(approverEmpIds, {
+        sender_id: callerEmpId,
+        type: 'LEAVE_CANCELLED',
+        title: 'Leave Request Cancelled by Employee',
+        message: `${cancellerName} has cancelled their leave request (#REQ-${id}). Reason: ${cancellation_reason}`,
+        reference_id: id,
+        reference_type: 'LEAVE',
+        link: `/leave-details/${id}`
+      });
+
+      // Confirmation to employee
+      await createNotification({
+        recipient_id: callerEmpId,
+        sender_id: null,
+        type: 'LEAVE_CANCELLED',
+        title: 'Leave Request Cancelled',
+        message: `Your leave request (#REQ-${id}) has been cancelled successfully. Any deducted balance was restored.`,
+        reference_id: id,
+        reference_type: 'LEAVE',
+        link: `/leave-details/${id}`
+      });
+    } else {
+      // Manager/Admin cancelled employee's leave: notify the employee
+      await createNotification({
+        recipient_id: leave.employee_id,
+        sender_id: callerEmpId,
+        type: 'LEAVE_CANCELLED',
+        title: 'Leave Request Cancelled by Manager/Admin',
+        message: `Your leave request (#REQ-${id}) was cancelled by ${cancellerName}. Reason: ${cancellation_reason}`,
+        reference_id: id,
+        reference_type: 'LEAVE',
+        link: `/leave-details/${id}`
+      });
+    }
 
     res.json({
       success: "true",
@@ -1669,6 +1766,18 @@ router.put('/:id/admin-modify', auth, hasPermission('can_modify_approved_leaves'
       admin_modification_reason,
       id
     ]);
+
+    // Send notification to employee about admin override/modification
+    await createNotification({
+      recipient_id: employeeId,
+      sender_id: req.user.employee_id,
+      type: 'LEAVE_ADMIN_MODIFIED',
+      title: 'Leave Request Updated by Admin',
+      message: `Your leave request (#REQ-${id}) was updated to status "${effectiveStatus}" by Admin. Reason: ${admin_modification_reason}`,
+      reference_id: id,
+      reference_type: 'LEAVE',
+      link: `/leave-details/${id}`
+    });
 
     res.json({
       success: "true",

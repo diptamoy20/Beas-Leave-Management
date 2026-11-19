@@ -1,11 +1,30 @@
-import React, { useMemo } from 'react';
-import { Alert, Button, Dropdown, Form, Modal } from 'react-bootstrap';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Alert, Button, Dropdown, Form, Modal, Spinner } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { FiMenu, FiBell, FiMoon, FiSun, FiUser, FiLogOut, FiCalendar, FiAward } from 'react-icons/fi';
+import {
+  FiMenu,
+  FiBell,
+  FiMoon,
+  FiSun,
+  FiUser,
+  FiLogOut,
+  FiCalendar,
+  FiAward,
+  FiCheck,
+  FiCheckCircle,
+  FiXCircle,
+  FiInfo,
+  FiClock
+} from 'react-icons/fi';
 import { toggleSidebar, toggleDarkMode } from '../../store/slices/themeSlice';
 import { logout } from '../../store/slices/authSlice';
-import { useState } from 'react';
+import {
+  fetchNotifications,
+  fetchUnreadCount,
+  markNotificationAsRead,
+  markAllNotificationsAsRead
+} from '../../store/slices/notificationSlice';
 import axios from 'axios';
 
 const Navbar = () => {
@@ -22,6 +41,68 @@ const Navbar = () => {
   const [resetLoading, setResetLoading] = useState(false);
   const { darkMode, sidebarExpanded } = useSelector((state) => state.theme);
   const { user } = useSelector((state) => state.auth);
+  const { notifications, unreadCount, loading: notifLoading } = useSelector((state) => state.notifications);
+
+  // Poll for notifications and unread count every 30 seconds
+  useEffect(() => {
+    if (user?.employee_id) {
+      dispatch(fetchUnreadCount());
+      const interval = setInterval(() => {
+        dispatch(fetchUnreadCount());
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [dispatch, user]);
+
+  const handleNotificationDropdownToggle = (isOpen) => {
+    if (isOpen) {
+      dispatch(fetchNotifications({ limit: 30, page: 1 }));
+    }
+  };
+
+  const handleNotificationClick = (notif) => {
+    if (!notif.is_read) {
+      dispatch(markNotificationAsRead(notif.id));
+    }
+    if (notif.link) {
+      navigate(notif.link);
+    } else if (notif.reference_id && notif.reference_type === 'LEAVE') {
+      navigate(`/leave-details/${notif.reference_id}`);
+    }
+  };
+
+  const handleMarkAllRead = (e) => {
+    e.stopPropagation();
+    dispatch(markAllNotificationsAsRead());
+  };
+
+  const formatNotifTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '';
+    const now = new Date();
+    const diffSec = Math.floor((now - date) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  };
+
+  const getNotifIcon = (type) => {
+    switch (type) {
+      case 'LEAVE_APPROVED':
+        return { icon: <FiCheckCircle size={16} />, bg: 'rgba(33, 154, 107, 0.15)', color: '#219a6b' };
+      case 'LEAVE_REJECTED':
+        return { icon: <FiXCircle size={16} />, bg: 'rgba(204, 90, 63, 0.15)', color: '#cc5a3f' };
+      case 'LEAVE_CANCELLED':
+        return { icon: <FiClock size={16} />, bg: 'rgba(215, 162, 74, 0.15)', color: '#d7a24a' };
+      case 'COMPOFF_CREDITED':
+        return { icon: <FiAward size={16} />, bg: 'rgba(76, 144, 166, 0.15)', color: '#4c90a6' };
+      default:
+        return { icon: <FiInfo size={16} />, bg: 'rgba(31, 78, 95, 0.12)', color: '#1f4e5f' };
+    }
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -118,10 +199,87 @@ const Navbar = () => {
           {darkMode ? <FiSun /> : <FiMoon />}
         </button>
 
-        <button className="navbar-icon-btn">
-          <FiBell />
-          <span className="notification-badge">3</span>
-        </button>
+        <Dropdown
+          align="end"
+          className="notification-dropdown"
+          autoClose={true}
+          onToggle={handleNotificationDropdownToggle}
+        >
+          <Dropdown.Toggle
+            variant="link"
+            className="navbar-icon-btn position-relative"
+            id="notification-dropdown-toggle"
+          >
+            <FiBell />
+            {unreadCount > 0 && (
+              <span className="notification-badge">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </Dropdown.Toggle>
+
+          <Dropdown.Menu className="notification-menu">
+            <div className="notif-header">
+              <div className="d-flex align-items-center gap-2">
+                <span className="fw-bold" style={{ fontSize: '0.95rem' }}>Notifications</span>
+                {unreadCount > 0 && (
+                  <span className="badge bg-danger rounded-pill" style={{ fontSize: '0.7rem' }}>
+                    {unreadCount} new
+                  </span>
+                )}
+              </div>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 text-decoration-none"
+                  style={{ fontSize: '0.78rem', color: 'var(--secondary-color)' }}
+                  onClick={handleMarkAllRead}
+                >
+                  <FiCheck className="me-1" /> Mark all read
+                </button>
+              )}
+            </div>
+
+            <div className="notif-list">
+              {notifLoading && notifications.length === 0 ? (
+                <div className="p-4 text-center text-muted">
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Loading notifications...
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="p-4 text-center text-muted">
+                  <FiBell size={28} className="d-block mx-auto mb-2 opacity-50" />
+                  <div className="fw-semibold">No notifications yet</div>
+                  <small style={{ fontSize: '0.78rem' }}>You're all caught up!</small>
+                </div>
+              ) : (
+                notifications.map((notif) => {
+                  const iconConfig = getNotifIcon(notif.type);
+                  return (
+                    <div
+                      key={notif.id}
+                      className={`notif-item ${!notif.is_read ? 'unread' : ''}`}
+                      onClick={() => handleNotificationClick(notif)}
+                    >
+                      <div
+                        className="notif-icon-circle"
+                        style={{ background: iconConfig.bg, color: iconConfig.color }}
+                      >
+                        {iconConfig.icon}
+                      </div>
+                      <div className="notif-body">
+                        <div className="notif-title">{notif.title}</div>
+                        <div className="notif-message">{notif.message}</div>
+                        <div className="notif-time">{formatNotifTime(notif.created_at)}</div>
+                      </div>
+                      {!notif.is_read && <span className="notif-unread-dot" />}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </Dropdown.Menu>
+        </Dropdown>
 
         <Dropdown align="end" className="profile-dropdown">
           <Dropdown.Toggle variant="link" id="profile-dropdown">

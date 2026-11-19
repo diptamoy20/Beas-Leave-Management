@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../config/db');
 const { auth, isManager } = require('../middleware/auth');
+const { createNotification } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -62,6 +63,19 @@ router.post('/credit', auth, isManager, async (req, res) => {
       INSERT INTO comp_off_history (employee_id, type, days, work_date, reason, credited_by)
       VALUES (?, 'CREDIT', ?, ?, ?, ?)
     `, [employee_id, numDays, work_date, reason.trim(), creditedBy]);
+
+    // Notify employee of credited Comp-Off
+    const creditedByName = req.user.name || `Manager #${creditedBy}`;
+    await createNotification({
+      recipient_id: employee_id,
+      sender_id: creditedBy,
+      type: 'COMPOFF_CREDITED',
+      title: 'Comp-Off Balance Credited',
+      message: `${numDays} day(s) of Comp-Off credited by ${creditedByName} for working on ${work_date}. Reason: ${reason.trim()}`,
+      reference_id: result.insertId,
+      reference_type: 'COMP_OFF',
+      link: `/my-comp-off`
+    });
 
     // Fetch updated balance
     const [balanceRows] = await db.query('SELECT comp_off FROM leave_balance WHERE employee_id = ?', [employee_id]);
