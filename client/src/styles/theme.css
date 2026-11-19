@@ -488,6 +488,25 @@ body.dark-mode {
   flex-direction: column;
 }
 
+.notification-menu-popup {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 1050;
+  animation: fadeInDown 0.18s ease-out;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .dark-mode .notification-menu {
   background: var(--dark-surface-strong);
   border-color: var(--dark-border);

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Alert, Button, Dropdown, Form, Modal, Spinner } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -42,6 +42,8 @@ const Navbar = () => {
   const { darkMode, sidebarExpanded } = useSelector((state) => state.theme);
   const { user } = useSelector((state) => state.auth);
   const { notifications, unreadCount, loading: notifLoading } = useSelector((state) => state.notifications);
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
+  const notifDropdownRef = useRef(null);
 
   // Poll for notifications and unread count every 30 seconds
   useEffect(() => {
@@ -54,16 +56,36 @@ const Navbar = () => {
     }
   }, [dispatch, user]);
 
-  const handleNotificationDropdownToggle = (isOpen) => {
-    if (isOpen) {
-      dispatch(fetchNotifications({ limit: 30, page: 1 }));
+  // Click outside listener to reliably close notification menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notifDropdownRef.current && !notifDropdownRef.current.contains(event.target)) {
+        setShowNotificationMenu(false);
+      }
+    };
+    if (showNotificationMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotificationMenu]);
+
+  const toggleNotificationMenu = () => {
+    setShowNotificationMenu((prev) => {
+      const nextState = !prev;
+      if (nextState) {
+        dispatch(fetchNotifications({ limit: 30, page: 1 }));
+      }
+      return nextState;
+    });
   };
 
   const handleNotificationClick = (notif) => {
     if (!notif.is_read) {
       dispatch(markNotificationAsRead(notif.id));
     }
+    setShowNotificationMenu(false);
     if (notif.link) {
       navigate(notif.link);
     } else if (notif.reference_id && notif.reference_type === 'LEAVE') {
@@ -199,16 +221,13 @@ const Navbar = () => {
           {darkMode ? <FiSun /> : <FiMoon />}
         </button>
 
-        <Dropdown
-          align="end"
-          className="notification-dropdown"
-          autoClose={true}
-          onToggle={handleNotificationDropdownToggle}
-        >
-          <Dropdown.Toggle
-            variant="link"
+        <div className="position-relative" ref={notifDropdownRef}>
+          <button
+            type="button"
             className="navbar-icon-btn position-relative"
-            id="notification-dropdown-toggle"
+            id="notification-btn"
+            onClick={toggleNotificationMenu}
+            aria-label="Notifications"
           >
             <FiBell />
             {unreadCount > 0 && (
@@ -216,70 +235,72 @@ const Navbar = () => {
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
-          </Dropdown.Toggle>
+          </button>
 
-          <Dropdown.Menu className="notification-menu">
-            <div className="notif-header">
-              <div className="d-flex align-items-center gap-2">
-                <span className="fw-bold" style={{ fontSize: '0.95rem' }}>Notifications</span>
+          {showNotificationMenu && (
+            <div className="notification-menu notification-menu-popup">
+              <div className="notif-header">
+                <div className="d-flex align-items-center gap-2">
+                  <span className="fw-bold" style={{ fontSize: '0.95rem' }}>Notifications</span>
+                  {unreadCount > 0 && (
+                    <span className="badge bg-danger rounded-pill" style={{ fontSize: '0.7rem' }}>
+                      {unreadCount} new
+                    </span>
+                  )}
+                </div>
                 {unreadCount > 0 && (
-                  <span className="badge bg-danger rounded-pill" style={{ fontSize: '0.7rem' }}>
-                    {unreadCount} new
-                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 text-decoration-none"
+                    style={{ fontSize: '0.78rem', color: 'var(--secondary-color)' }}
+                    onClick={handleMarkAllRead}
+                  >
+                    <FiCheck className="me-1" /> Mark all read
+                  </button>
                 )}
               </div>
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-link btn-sm p-0 text-decoration-none"
-                  style={{ fontSize: '0.78rem', color: 'var(--secondary-color)' }}
-                  onClick={handleMarkAllRead}
-                >
-                  <FiCheck className="me-1" /> Mark all read
-                </button>
-              )}
-            </div>
 
-            <div className="notif-list">
-              {notifLoading && notifications.length === 0 ? (
-                <div className="p-4 text-center text-muted">
-                  <Spinner animation="border" size="sm" className="me-2" />
-                  Loading notifications...
-                </div>
-              ) : notifications.length === 0 ? (
-                <div className="p-4 text-center text-muted">
-                  <FiBell size={28} className="d-block mx-auto mb-2 opacity-50" />
-                  <div className="fw-semibold">No notifications yet</div>
-                  <small style={{ fontSize: '0.78rem' }}>You're all caught up!</small>
-                </div>
-              ) : (
-                notifications.map((notif) => {
-                  const iconConfig = getNotifIcon(notif.type);
-                  return (
-                    <div
-                      key={notif.id}
-                      className={`notif-item ${!notif.is_read ? 'unread' : ''}`}
-                      onClick={() => handleNotificationClick(notif)}
-                    >
+              <div className="notif-list">
+                {notifLoading && notifications.length === 0 ? (
+                  <div className="p-4 text-center text-muted">
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Loading notifications...
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="p-4 text-center text-muted">
+                    <FiBell size={28} className="d-block mx-auto mb-2 opacity-50" />
+                    <div className="fw-semibold">No notifications yet</div>
+                    <small style={{ fontSize: '0.78rem' }}>You're all caught up!</small>
+                  </div>
+                ) : (
+                  notifications.map((notif) => {
+                    const iconConfig = getNotifIcon(notif.type);
+                    return (
                       <div
-                        className="notif-icon-circle"
-                        style={{ background: iconConfig.bg, color: iconConfig.color }}
+                        key={notif.id}
+                        className={`notif-item ${!notif.is_read ? 'unread' : ''}`}
+                        onClick={() => handleNotificationClick(notif)}
                       >
-                        {iconConfig.icon}
+                        <div
+                          className="notif-icon-circle"
+                          style={{ background: iconConfig.bg, color: iconConfig.color }}
+                        >
+                          {iconConfig.icon}
+                        </div>
+                        <div className="notif-body">
+                          <div className="notif-title">{notif.title}</div>
+                          <div className="notif-message">{notif.message}</div>
+                          <div className="notif-time">{formatNotifTime(notif.created_at)}</div>
+                        </div>
+                        {!notif.is_read && <span className="notif-unread-dot" />}
                       </div>
-                      <div className="notif-body">
-                        <div className="notif-title">{notif.title}</div>
-                        <div className="notif-message">{notif.message}</div>
-                        <div className="notif-time">{formatNotifTime(notif.created_at)}</div>
-                      </div>
-                      {!notif.is_read && <span className="notif-unread-dot" />}
-                    </div>
-                  );
-                })
-              )}
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </Dropdown.Menu>
-        </Dropdown>
+          )}
+        </div>
 
         <Dropdown align="end" className="profile-dropdown">
           <Dropdown.Toggle variant="link" id="profile-dropdown">
