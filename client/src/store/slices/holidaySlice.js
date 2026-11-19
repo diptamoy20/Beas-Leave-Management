@@ -1,10 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-export const fetchHolidays = createAsyncThunk('holiday/fetchHolidays', async (_, { rejectWithValue }) => {
+export const fetchHolidays = createAsyncThunk('holiday/fetchHolidays', async (year, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem('token');
-    const response = await axios.get('/api/holidays', {
+    const url = year ? `/api/holidays?year=${year}` : '/api/holidays';
+    const response = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data.data;
@@ -28,7 +29,7 @@ const holidaySlice = createSlice({
       })
       .addCase(fetchHolidays.fulfilled, (state, action) => {
         state.loading = false;
-        state.holidays = action.payload.holidayData;
+        state.holidays = action.payload?.holidayData || [];
       })
       .addCase(fetchHolidays.rejected, (state, action) => {
         state.loading = false;

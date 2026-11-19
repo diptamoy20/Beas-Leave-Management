@@ -35,16 +35,8 @@ const Holidays = () => {
     fetchHolidaysData();
   }, [selectedYear]);
 
-  const fetchHolidaysData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.get(`/api/holidays?year=${selectedYear}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      dispatch(fetchHolidays());
-    } catch (error) {
-      console.error('Error fetching holidays:', error);
-    }
+  const fetchHolidaysData = () => {
+    dispatch(fetchHolidays(selectedYear));
   };
 
   const handleFileUpload = async (e) => {
