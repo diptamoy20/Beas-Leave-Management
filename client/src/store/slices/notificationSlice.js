@@ -107,21 +107,21 @@ const notificationSlice = createSlice({
         state.unreadCount = action.payload;
       })
 
-      // Mark single read
+      // Mark single read (permanently removed from list and unread count)
       .addCase(markNotificationAsRead.fulfilled, (state, action) => {
         const id = action.payload;
-        const notif = state.notifications.find((n) => n.id === id);
-        if (notif && !notif.is_read) {
-          notif.is_read = 1;
-          state.unreadCount = Math.max(0, state.unreadCount - 1);
+        const index = state.notifications.findIndex((n) => n.id === id);
+        if (index !== -1) {
+          if (!state.notifications[index].is_read) {
+            state.unreadCount = Math.max(0, state.unreadCount - 1);
+          }
+          state.notifications.splice(index, 1);
         }
       })
 
-      // Mark all read
+      // Mark all read (permanently cleared)
       .addCase(markAllNotificationsAsRead.fulfilled, (state) => {
-        state.notifications.forEach((n) => {
-          n.is_read = 1;
-        });
+        state.notifications = [];
         state.unreadCount = 0;
       });
   }

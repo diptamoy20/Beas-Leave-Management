@@ -606,6 +606,23 @@ body.dark-mode {
   color: var(--light-muted);
 }
 
+.notif-dismiss-btn {
+  color: var(--light-muted) !important;
+  opacity: 0.6;
+  padding: 4px !important;
+  border-radius: 6px;
+  line-height: 1;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.notif-dismiss-btn:hover {
+  opacity: 1;
+  color: var(--danger-color) !important;
+  background: rgba(204, 90, 63, 0.1);
+}
+
 .notif-unread-dot {
   width: 8px;
   height: 8px;

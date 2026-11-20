@@ -15,7 +15,8 @@ import {
   FiCheckCircle,
   FiXCircle,
   FiInfo,
-  FiClock
+  FiClock,
+  FiX
 } from 'react-icons/fi';
 import { toggleSidebar, toggleDarkMode } from '../../store/slices/themeSlice';
 import { logout } from '../../store/slices/authSlice';
@@ -82,15 +83,18 @@ const Navbar = () => {
   };
 
   const handleNotificationClick = (notif) => {
-    if (!notif.is_read) {
-      dispatch(markNotificationAsRead(notif.id));
-    }
+    dispatch(markNotificationAsRead(notif.id));
     setShowNotificationMenu(false);
     if (notif.link) {
       navigate(notif.link);
     } else if (notif.reference_id && notif.reference_type === 'LEAVE') {
       navigate(`/leave-details/${notif.reference_id}`);
     }
+  };
+
+  const handleDismissNotification = (e, notifId) => {
+    e.stopPropagation();
+    dispatch(markNotificationAsRead(notifId));
   };
 
   const handleMarkAllRead = (e) => {
@@ -292,7 +296,15 @@ const Navbar = () => {
                           <div className="notif-message">{notif.message}</div>
                           <div className="notif-time">{formatNotifTime(notif.created_at)}</div>
                         </div>
-                        {!notif.is_read && <span className="notif-unread-dot" />}
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0 notif-dismiss-btn"
+                          title="Dismiss notification"
+                          aria-label="Dismiss notification"
+                          onClick={(e) => handleDismissNotification(e, notif.id)}
+                        >
+                          <FiX size={15} />
+                        </button>
                       </div>
                     );
                   })

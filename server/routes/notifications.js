@@ -85,7 +85,7 @@ router.get('/unread-count', auth, async (req, res) => {
 
 /**
  * PATCH /api/notifications/:id/read
- * Mark an individual notification as read.
+ * Mark an individual notification as read (or permanently remove it once seen/read).
  */
 router.patch('/:id/read', auth, async (req, res) => {
   try {
@@ -106,41 +106,77 @@ router.patch('/:id/read', auth, async (req, res) => {
       return res.status(403).json({ success: "false", message: 'Access denied to this notification' });
     }
 
+    // Permanently remove the notification once seen/read
     await db.run(
-      'UPDATE notifications SET is_read = 1 WHERE id = ?',
+      'DELETE FROM notifications WHERE id = ?',
       [notificationId]
     );
 
     res.json({
       success: "true",
-      message: 'Notification marked as read',
-      data: { id: notificationId, is_read: 1 }
+      message: 'Notification removed',
+      data: { id: notificationId, deleted: true }
     });
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    console.error('Error removing notification on read:', error);
+    res.status(500).json({ success: "false", message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/notifications/:id
+ * Explicit delete endpoint for an individual notification
+ */
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const employeeId = Number(req.user.employee_id);
+    const notificationId = Number(req.params.id);
+
+    const [existing] = await db.query(
+      'SELECT id, recipient_id FROM notifications WHERE id = ?',
+      [notificationId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: "false", message: 'Notification not found' });
+    }
+
+    if (Number(existing[0].recipient_id) !== employeeId) {
+      return res.status(403).json({ success: "false", message: 'Access denied to this notification' });
+    }
+
+    await db.run('DELETE FROM notifications WHERE id = ?', [notificationId]);
+
+    res.json({
+      success: "true",
+      message: 'Notification deleted successfully',
+      data: { id: notificationId }
+    });
+  } catch (error) {
+    console.error('Error deleting notification:', error);
     res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
 
 /**
  * PATCH /api/notifications/read-all
- * Mark all notifications for the authenticated user as read.
+ * Mark all notifications for the authenticated user as read and remove them.
  */
 router.patch('/read-all', auth, async (req, res) => {
   try {
     const employeeId = Number(req.user.employee_id);
 
     await db.run(
-      'UPDATE notifications SET is_read = 1 WHERE recipient_id = ? AND is_read = 0',
+      'DELETE FROM notifications WHERE recipient_id = ?',
       [employeeId]
     );
 
     res.json({
       success: "true",
-      message: 'All notifications marked as read'
+      message: 'All notifications cleared successfully'
     });
   } catch (error) {
-    console.error('Error marking all notifications as read:', error);
+    console.error('Error clearing notifications:', error);
     res.status(500).json({ success: "false", message: 'Server error', error: error.message });
   }
 });
