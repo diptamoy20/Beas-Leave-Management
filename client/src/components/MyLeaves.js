@@ -171,7 +171,7 @@ const MyLeaves = () => {
             {formatDate(row.start_date)}
             {row.end_date && row.end_date !== row.start_date ? ` → ${formatDate(row.end_date)}` : ''}
           </span>
-          {row.is_modified_on_approval && (
+          {Boolean(row.is_modified_on_approval) && (
             <div className="text-warning small" style={{ fontSize: '0.72rem' }}>
               Originally: {formatDate(row.original_start_date)} → {formatDate(row.original_end_date)}
             </div>
@@ -189,7 +189,7 @@ const MyLeaves = () => {
           <span className="fw-semibold text-primary">
             {row.no_of_days} Day{Number(row.no_of_days) !== 1 ? 's' : ''}
           </span>
-          {row.is_modified_on_approval && (
+          {Boolean(row.is_modified_on_approval) && (
             <div>
               <Badge bg="warning" text="dark" style={{ fontSize: '0.68rem' }} title={row.approval_edit_reason}>
                 Modified by Approver
